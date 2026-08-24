@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="./css/extra.css" />
   <link rel="stylesheet" href="./css/v5.css" />
   <link rel="stylesheet" href="./css/semantic.css" />
+  <link rel="stylesheet" href="./css/v6.css" />
 </head>
 <body>
   <div class="app-shell">
@@ -51,6 +52,7 @@
       <div class="dialog-header"><div><h2>학습 설정</h2><p>과목과 영역을 내 공부 범위에 맞게 구성하세요.</p></div><button class="icon-btn" value="cancel" aria-label="닫기">×</button></div>
       <section class="settings-section"><h3>상단 과목 바</h3><p class="muted">체크한 과목만 상단에 표시됩니다.</p><div id="subjectSettings" class="subject-setting-list"></div></section>
       <section class="settings-section"><h3>과목별 영역</h3><p class="muted">PDF/JSON에 존재하는 실제 영역을 자동으로 표시합니다. ‘표시’와 ‘회독/학습’ 범위를 각각 정할 수 있습니다.</p><div id="areaSettings" class="area-settings"></div></section>
+      <section class="settings-section"><h3>빈칸 선택 방식</h3><p class="muted">조사를 빈칸에 포함할지 선택합니다. 끄면 예: ‘교육과정의’ → [교육과정]의</p><label class="toggle-row"><input id="particleSelectable" type="checkbox" /> <span><strong>조사도 선택하기</strong><small>끔: 조사 제외 · 켬: 어절 전체를 빈칸으로</small></span></label></section>
       <section class="settings-section"><h3>타이핑 채점</h3>
         <label class="radio-row"><input type="radio" name="gradingMode" value="flexible" /> 유연 채점 <span>띄어쓰기·문장부호 차이 허용</span></label>
         <label class="radio-row"><input type="radio" name="gradingMode" value="strict" /> 엄격 채점 <span>원문과 동일해야 정답</span></label>
@@ -63,5 +65,6 @@
 
   <script type="module" src="./js/app-v5.js"></script>
   <script src="./js/ui-semantic-patch.js" defer></script>
+  <script src="./js/cloze-v6-patch.js" defer></script>
 </body>
 </html>
