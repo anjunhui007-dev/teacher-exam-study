@@ -1,0 +1,7 @@
+/* Meaning-unit layout shared by source reading, masking and typing */
+.original-text,.token-editor,.mask-study,.typing-inline{white-space:pre-wrap;word-break:keep-all;overflow-wrap:break-word}
+.source-document>p{margin:0;padding:13px 0;border-bottom:1px solid rgba(23,26,33,.09);line-height:2}
+.source-document>p:last-child{border-bottom:0}
+.source-document>.source-heading{margin:24px 0 0;padding:18px 0 11px;border-bottom:1px solid rgba(23,26,33,.14)}
+.semantic-separator{display:block;height:1px;background:rgba(23,26,33,.09);margin:13px 0}
+.token-editor,.mask-study,.typing-inline{line-height:2}
