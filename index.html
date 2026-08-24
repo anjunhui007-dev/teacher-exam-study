@@ -12,13 +12,11 @@
       <div class="brand-wrap">
         <button id="homeBtn" class="brand-button" aria-label="홈으로 이동">
           <span class="brand-mark">T</span>
-          <span>
-            <strong>Teacher Exam Study</strong>
-            <small>초등임용 교육과정 학습</small>
-          </span>
+          <span><strong>Teacher Exam Study</strong><small>초등임용 교육과정 학습</small></span>
         </button>
       </div>
       <div class="header-actions">
+        <button id="weaknessBtn" class="ghost-btn weakness-header-btn">약점 보충 <span id="weaknessBadge" class="badge hidden">0</span></button>
         <button id="importBtn" class="ghost-btn">자료 업로드</button>
         <button id="settingsBtn" class="ghost-btn">설정</button>
         <input id="importFile" type="file" accept="application/json,.json" hidden />
@@ -27,46 +25,24 @@
 
     <nav id="subjectBar" class="subject-bar" aria-label="과목 선택"></nav>
     <nav id="sectionBar" class="section-bar" aria-label="세부 영역 선택"></nav>
-
     <main id="appMain" class="app-main"></main>
   </div>
 
   <dialog id="settingsDialog" class="settings-dialog">
     <form method="dialog" id="settingsForm">
       <div class="dialog-header">
-        <div>
-          <h2>학습 설정</h2>
-          <p>표시할 과목과 타이핑 채점 방식을 선택하세요.</p>
-        </div>
+        <div><h2>학습 설정</h2><p>표시할 과목과 타이핑 채점 방식을 선택하세요.</p></div>
         <button class="icon-btn" value="cancel" aria-label="닫기">×</button>
       </div>
-
-      <section class="settings-section">
-        <h3>상단 과목 바</h3>
-        <div id="subjectSettings" class="subject-setting-list"></div>
-      </section>
-
+      <section class="settings-section"><h3>상단 과목 바</h3><div id="subjectSettings" class="subject-setting-list"></div></section>
       <section class="settings-section">
         <h3>타이핑 채점</h3>
         <label class="radio-row"><input type="radio" name="gradingMode" value="flexible" /> 유연 채점 <span>띄어쓰기·문장부호 차이 허용</span></label>
-        <label class="radio-row"><input type="radio" name="gradingMode" value="strict" /> 엄격 채점 <span>원문과 거의 동일해야 정답</span></label>
+        <label class="radio-row"><input type="radio" name="gradingMode" value="strict" /> 엄격 채점 <span>원문과 동일해야 정답</span></label>
         <label class="radio-row"><input type="radio" name="gradingMode" value="self" /> 직접 확인 <span>정답을 보고 내가 판정</span></label>
       </section>
-
-      <section class="settings-section">
-        <h3>AI API</h3>
-        <p class="muted">지금은 설정 자리만 준비되어 있고 실제 호출은 비활성화되어 있습니다.</p>
-        <select id="aiProvider">
-          <option value="none">사용 안 함</option>
-          <option value="openai">OpenAI</option>
-          <option value="gemini">Google Gemini</option>
-        </select>
-      </section>
-
-      <div class="dialog-actions">
-        <button value="cancel" class="ghost-btn">취소</button>
-        <button id="saveSettingsBtn" type="button" class="primary-btn">저장</button>
-      </div>
+      <section class="settings-section"><h3>AI API</h3><p class="muted">지금은 설정 자리만 준비되어 있고 실제 호출은 비활성화되어 있습니다.</p><select id="aiProvider"><option value="none">사용 안 함</option><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option></select></section>
+      <div class="dialog-actions"><button value="cancel" class="ghost-btn">취소</button><button id="saveSettingsBtn" type="button" class="primary-btn">저장</button></div>
     </form>
   </dialog>
 
