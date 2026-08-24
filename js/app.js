@@ -1,6 +1,8 @@
-const DATA_KEY = "tes_curriculum_v1";
-const USER_KEY = "tes_user_v1";
-const SETTINGS_KEY = "tes_settings_v1";
+const DATA_KEY = "tes_curriculum_v2";
+const USER_KEY = "tes_user_v2";
+const SETTINGS_KEY = "tes_settings_v2";
+const BUNDLE_MARKER_KEY = "tes_bundle_marker";
+const BUNDLE_MARKER = "general-solli-20260824-1";
 
 const DEFAULT_SUBJECTS = [
   { id: "general", name: "총론" },
@@ -17,71 +19,35 @@ const DEFAULT_SUBJECTS = [
   { id: "integrated", name: "통합교과" }
 ];
 
-const SAMPLE_DATA = {
-  schemaVersion: 1,
+const EMPTY_DATA = {
+  schemaVersion: 2,
   contentType: "curriculum",
-  subjects: [
-    {
-      id: "general",
-      name: "총론",
-      sections: [
-        {
-          id: "overview",
-          name: "총론",
-          items: [{
-            id: "sample-general-1",
-            title: "샘플 원문",
-            originalText: "이 문장은 기능 확인을 위한 샘플입니다. 실제 교육과정 원문 파일을 업로드하면 이 자리에 그대로 표시됩니다."
-          }]
-        },
-        {
-          id: "creative",
-          name: "창의적 체험활동",
-          items: [{
-            id: "sample-creative-1",
-            title: "창의적 체험활동 샘플",
-            originalText: "창의적 체험활동 자료도 총론 아래의 독립 영역으로 탐색할 수 있습니다."
-          }]
-        }
-      ]
-    },
-    {
-      id: "korean",
-      name: "국어",
-      sections: [
-        { id: "character", name: "성격", items: [] },
-        { id: "goals", name: "목표", items: [] },
-        { id: "content", name: "내용 체계", items: [] },
-        { id: "achievement", name: "성취기준", items: [] },
-        { id: "teaching", name: "교수·학습", items: [{ id: "sample-korean-1", title: "가리기 기능 연습", originalText: "학습할 원문의 어절을 직접 터치하여 암기할 부분을 선택할 수 있습니다." }] },
-        { id: "assessment", name: "평가", items: [] }
-      ]
-    },
-    { id: "integrated", name: "통합교과", sections: [{ id: "overview", name: "교육과정", items: [] }] }
-  ]
+  subjects: DEFAULT_SUBJECTS.map(s => ({ ...s, sections: [] }))
 };
 
 const state = {
-  data: load(DATA_KEY, SAMPLE_DATA),
+  data: load(DATA_KEY, EMPTY_DATA),
   user: load(USER_KEY, { itemState: {} }),
   settings: load(SETTINGS_KEY, {
     visibleSubjects: DEFAULT_SUBJECTS.map(s => s.id),
     gradingMode: "flexible",
     aiProvider: "none"
   }),
-  subjectId: null,
+  subjectId: "general",
   sectionId: null,
   itemId: null,
-  view: "reader",
+  view: "home",
   studyMode: "mask-edit"
 };
 
 const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
 const esc = (v = "") => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
 
+function clone(v) { return JSON.parse(JSON.stringify(v)); }
 function load(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? structuredClone(fallback); }
-  catch { return structuredClone(fallback); }
+  try { return JSON.parse(localStorage.getItem(key)) ?? clone(fallback); }
+  catch { return clone(fallback); }
 }
 function save() {
   localStorage.setItem(DATA_KEY, JSON.stringify(state.data));
@@ -89,18 +55,37 @@ function save() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
 }
 
+function mergeSubject(subject, replace = true) {
+  const idx = state.data.subjects.findIndex(s => s.id === subject.id);
+  if (idx >= 0 && replace) state.data.subjects[idx] = subject;
+  else if (idx < 0) state.data.subjects.push(subject);
+}
+
+async function loadBundledData() {
+  if (localStorage.getItem(BUNDLE_MARKER_KEY) === BUNDLE_MARKER) return;
+  try {
+    const res = await fetch("./data/general_curriculum_solli.json", { cache: "no-store" });
+    if (!res.ok) return;
+    const bundle = await res.json();
+    (bundle.subjects || []).forEach(subject => mergeSubject(subject, true));
+    localStorage.setItem(BUNDLE_MARKER_KEY, BUNDLE_MARKER);
+    save();
+  } catch (err) {
+    console.info("Bundled curriculum data is available after deployment or can be uploaded manually.", err);
+  }
+}
+
 function allSubjects() {
   const map = new Map(DEFAULT_SUBJECTS.map(s => [s.id, s]));
-  state.data.subjects.forEach(s => map.set(s.id, { id: s.id, name: s.name }));
+  (state.data.subjects || []).forEach(s => map.set(s.id, { id: s.id, name: s.name }));
   return [...map.values()];
 }
-function visibleSubjects() {
-  return allSubjects().filter(s => state.settings.visibleSubjects.includes(s.id));
-}
+function visibleSubjects() { return allSubjects().filter(s => state.settings.visibleSubjects.includes(s.id)); }
 function subjectData(id) { return state.data.subjects.find(s => s.id === id); }
 function currentSubject() { return subjectData(state.subjectId); }
 function currentSection() { return currentSubject()?.sections?.find(s => s.id === state.sectionId); }
 function currentItem() { return currentSection()?.items?.find(i => i.id === state.itemId); }
+
 function ensureSelection() {
   const visible = visibleSubjects();
   if (!visible.some(s => s.id === state.subjectId)) state.subjectId = visible[0]?.id ?? null;
@@ -130,6 +115,7 @@ function renderSubjectBar() {
     render();
   });
 }
+
 function renderSectionBar() {
   const subject = currentSubject();
   const bar = $("#sectionBar");
@@ -142,42 +128,75 @@ function renderSectionBar() {
   });
 }
 
+function countItems() {
+  return state.data.subjects.reduce((a,s) => a + (s.sections || []).reduce((b,sec) => b + (sec.items?.length || 0), 0), 0);
+}
+
 function renderHome() {
-  const imported = state.data.subjects.reduce((a,s) => a + (s.sections ?? []).reduce((b,sec) => b + (sec.items?.length ?? 0),0),0);
   const masked = Object.values(state.user.itemState).filter(x => x.masked?.length).length;
-  const attempts = Object.values(state.user.itemState).reduce((a,x) => a + (x.attempts ?? 0),0);
+  const attempts = Object.values(state.user.itemState).reduce((a,x) => a + (x.attempts || 0), 0);
   $("#appMain").innerHTML = `
-    <section class="hero"><div><span class="eyebrow">Curriculum Study</span><h1>교육과정을 내 방식대로 외우세요.</h1><p>과목과 파트를 선택하고, 원문에서 직접 암기할 어절을 지정해 반복 학습합니다.</p></div></section>
+    <section class="hero"><div><span class="eyebrow">Curriculum Study</span><h1>교육과정을 내 방식대로 외우세요.</h1><p>원문 형식과 강조 표시를 보존하고, 직접 암기할 어절을 골라 가리기와 타이핑으로 학습합니다.</p></div></section>
     <div class="metric-row">
-      <article class="card metric"><span>등록 원문</span><strong>${imported}</strong></article>
+      <article class="card metric"><span>등록 원문 항목</span><strong>${countItems()}</strong></article>
       <article class="card metric"><span>가리기 설정</span><strong>${masked}</strong></article>
       <article class="card metric"><span>타이핑 시도</span><strong>${attempts}</strong></article>
     </div>
     <div class="dashboard-grid">
-      <article class="card panel"><h2>바로 학습하기</h2><p>상단 과목 바에서 원하는 과목을 누르면 해당 교육과정으로 이동합니다.</p><div class="quick-actions"><button id="continueBtn" class="primary-btn">현재 과목 열기</button><button id="homeImportBtn" class="ghost-btn">JSON 자료 업로드</button></div></article>
-      <article class="card panel"><h2>현재 설계</h2><p>가리기와 타이핑에 집중한 1차 버전입니다. 맥락형 문제와 AI 생성 기능은 이후 확장할 수 있도록 분리되어 있습니다.</p></article>
+      <article class="card panel"><h2>총론 실제 자료 탑재</h2><p>업로드한 HWPX의 문단, 표, 빨간 글자 강조를 보존해 총론 데이터로 변환했습니다. 상단의 <strong>총론</strong>을 눌러 확인하세요.</p><div class="quick-actions"><button id="openGeneralBtn" class="primary-btn">총론 열기</button><button id="homeImportBtn" class="ghost-btn">JSON 자료 업로드</button></div></article>
+      <article class="card panel"><h2>빨간 글자 활용</h2><p>원문에서는 붉은 강조로 표시되고, 가리기 설정에서 <strong>붉은 강조 모두 선택</strong>으로 암기 범위를 한 번에 지정할 수 있습니다.</p></article>
     </div>`;
-  $("#continueBtn").onclick = () => { state.view = "reader"; render(); };
+  $("#openGeneralBtn").onclick = () => { state.subjectId = "general"; state.sectionId = state.itemId = null; state.view = "reader"; render(); };
   $("#homeImportBtn").onclick = () => $("#importFile").click();
+}
+
+function renderSegments(segments = []) {
+  return segments.map(s => `<span class="${s.highlight ? "source-highlight" : ""}">${esc(s.text)}</span>`).join("");
+}
+
+function renderTable(block) {
+  const occupied = new Set();
+  const byPos = new Map((block.cells || []).map(c => [`${c.row}:${c.col}`, c]));
+  let html = `<div class="table-scroll"><table class="source-table"><tbody>`;
+  for (let r = 0; r < (block.rows || 0); r++) {
+    html += "<tr>";
+    for (let c = 0; c < (block.cols || 0); c++) {
+      if (occupied.has(`${r}:${c}`)) continue;
+      const cell = byPos.get(`${r}:${c}`);
+      if (!cell) { html += "<td></td>"; continue; }
+      for (let rr = r; rr < r + (cell.rowspan || 1); rr++) for (let cc = c; cc < c + (cell.colspan || 1); cc++) if (rr !== r || cc !== c) occupied.add(`${rr}:${cc}`);
+      html += `<td rowspan="${cell.rowspan || 1}" colspan="${cell.colspan || 1}">${renderSegments(cell.segments)}</td>`;
+    }
+    html += "</tr>";
+  }
+  return html + "</tbody></table></div>";
+}
+
+function renderBlocks(item) {
+  if (!item?.blocks?.length) return `<div class="original-text">${esc(item?.originalText || "")}</div>`;
+  return `<div class="source-document">${item.blocks.map(block => {
+    if (block.type === "table") return renderTable(block);
+    return `<p>${renderSegments(block.segments)}</p>`;
+  }).join("")}</div>`;
 }
 
 function renderReader() {
   const subject = currentSubject();
   const section = currentSection();
   const item = currentItem();
-  if (!subject || !section) return renderHome();
-  const items = section.items ?? [];
+  if (!subject) return renderHome();
+  const items = section?.items ?? [];
   $("#appMain").innerHTML = `
-    <section class="hero"><div><span class="eyebrow">${esc(subject.name)}</span><h1>${esc(section.name)}</h1><p>왼쪽 목차에서 원문 항목을 선택하세요.</p></div></section>
+    <section class="hero compact"><div><span class="eyebrow">${esc(subject.name)}</span><h1>${esc(section?.name || "자료 없음")}</h1><p>${items.length ? "왼쪽 목차에서 세부 항목을 선택하세요." : "아직 이 영역에 등록된 자료가 없습니다."}</p></div></section>
     <div class="content-layout">
-      <aside class="card toc"><div class="toc-title">목차</div>${items.length ? items.map(i => `<button class="${i.id === state.itemId ? "active" : ""}" data-item="${esc(i.id)}">${esc(i.title || "제목 없음")}</button>`).join("") : `<div class="empty-state" style="padding:24px 8px">자료 없음</div>`}</aside>
+      <aside class="card toc"><div class="toc-title">세부 목차</div>${items.length ? items.map(i => `<button class="${i.id === state.itemId ? "active" : ""}" data-item="${esc(i.id)}">${esc(i.title || "제목 없음")}</button>`).join("") : `<div class="empty-state small">자료 없음</div>`}</aside>
       <article class="card reader">${item ? `
         <div class="breadcrumb">${esc(subject.name)} / ${esc(section.name)}</div>
-        <h1>${esc(item.title || "교육과정 원문")}</h1>
-        <div class="original-text">${esc(item.originalText)}</div>
-        <div class="reader-actions"><button id="maskStartBtn" class="soft-btn">가리기 설정</button><button id="typingStartBtn" class="primary-btn">타이핑 학습</button></div>` : `<div class="empty-state"><h2>아직 등록된 원문이 없어요.</h2><p>이 채팅에서 변환한 JSON 파일을 ‘자료 업로드’로 추가하면 됩니다.</p><button id="emptyImportBtn" class="primary-btn">자료 업로드</button></div>`}</article>
+        <div class="reader-heading"><div><h1>${esc(item.title || "교육과정 원문")}</h1><p class="reader-note">원문 속 빨간 글자는 업로드된 HWPX의 강조를 그대로 반영했습니다.</p></div><span class="highlight-legend"><i></i> 원문 강조</span></div>
+        ${renderBlocks(item)}
+        <div class="reader-actions"><button id="maskStartBtn" class="soft-btn">가리기 설정</button><button id="typingStartBtn" class="primary-btn">타이핑 학습</button></div>` : `<div class="empty-state"><h2>등록된 원문이 없어요.</h2><p>이 채팅에서 변환한 JSON 파일을 자료 업로드로 추가할 수 있습니다.</p><button id="emptyImportBtn" class="primary-btn">자료 업로드</button></div>`}</article>
     </div>`;
-  document.querySelectorAll("[data-item]").forEach(btn => btn.onclick = () => { state.itemId = btn.dataset.item; render(); });
+  $$('[data-item]').forEach(btn => btn.onclick = () => { state.itemId = btn.dataset.item; render(); });
   if (item) {
     $("#maskStartBtn").onclick = () => { state.view = "study"; state.studyMode = "mask-edit"; render(); };
     $("#typingStartBtn").onclick = () => { state.view = "study"; state.studyMode = "typing"; render(); };
@@ -185,11 +204,16 @@ function renderReader() {
 }
 
 function tokenize(text) {
-  return text.split(/(\s+)/).map((text, index) => ({ index, text, isSpace: /^\s+$/.test(text) }));
+  return String(text || "").split(/(\s+)/).map((text, index) => ({ index, text, isSpace: /^\s+$/.test(text) }));
 }
 function itemUserState(id) {
   state.user.itemState[id] ??= { masked: [], attempts: 0, correct: 0 };
   return state.user.itemState[id];
+}
+function normalizeWord(v) { return String(v || "").toLowerCase().replace(/[\s.,!?;:'"“”‘’·⋅()\[\]{}<>/\\\-_~`]+/g, ""); }
+function highlightedTokenIndexes(item) {
+  const terms = new Set((item.highlightWords || []).map(normalizeWord).filter(Boolean));
+  return tokenize(item.originalText).filter(t => !t.isSpace && terms.has(normalizeWord(t.text))).map(t => t.index);
 }
 
 function renderStudy() {
@@ -206,7 +230,7 @@ function renderStudy() {
       <div id="studyContent"></div>
       <div class="study-footer"><button id="backReaderBtn" class="ghost-btn">원문으로 돌아가기</button><div id="studyFooterRight"></div></div>
     </article>`;
-  document.querySelectorAll("[data-mode]").forEach(btn => btn.onclick = () => { state.studyMode = btn.dataset.mode; renderStudy(); });
+  $$('[data-mode]').forEach(btn => btn.onclick = () => { state.studyMode = btn.dataset.mode; renderStudy(); });
   $("#backReaderBtn").onclick = () => { state.view = "reader"; render(); };
   if (state.studyMode === "mask-edit") renderMaskEditor(item, u);
   if (state.studyMode === "mask-study") renderMaskStudy(item, u);
@@ -215,117 +239,127 @@ function renderStudy() {
 
 function renderMaskEditor(item, u) {
   const tokens = tokenize(item.originalText);
-  $("#studyContent").innerHTML = `<div class="helper">암기하고 싶은 <strong>어절을 터치</strong>하세요. 다시 터치하면 선택이 해제됩니다. 선택 정보는 원문과 별도로 저장됩니다.</div><div id="tokenEditor" class="token-editor">${tokens.map(t => t.isSpace ? esc(t.text) : `<span class="token selectable ${u.masked.includes(t.index) ? "selected" : ""}" data-token="${t.index}">${esc(t.text)}</span>`).join("")}</div>`;
-  $("#studyFooterRight").innerHTML = `<button id="clearMasksBtn" class="ghost-btn">전체 해제</button> <button id="goMaskStudyBtn" class="primary-btn">가리기 학습 시작</button>`;
-  document.querySelectorAll("[data-token]").forEach(el => el.onclick = () => {
+  const sourceIndexes = highlightedTokenIndexes(item);
+  $("#studyContent").innerHTML = `<div class="helper">암기하고 싶은 <strong>어절을 터치</strong>하세요. 붉은색 테두리 어절은 원문에서 빨간 글자로 강조된 부분입니다.</div><div id="tokenEditor" class="token-editor">${tokens.map(t => t.isSpace ? esc(t.text) : `<span class="token selectable ${u.masked.includes(t.index) ? "selected" : ""} ${sourceIndexes.includes(t.index) ? "source-token" : ""}" data-token="${t.index}">${esc(t.text)}</span>`).join("")}</div>`;
+  $("#studyFooterRight").innerHTML = `<button id="selectSourceBtn" class="soft-btn">붉은 강조 모두 선택</button> <button id="clearMasksBtn" class="ghost-btn">전체 해제</button> <button id="goMaskStudyBtn" class="primary-btn">가리기 학습 시작</button>`;
+  $$('[data-token]').forEach(el => el.onclick = () => {
     const idx = Number(el.dataset.token);
     u.masked = u.masked.includes(idx) ? u.masked.filter(x => x !== idx) : [...u.masked, idx].sort((a,b)=>a-b);
     save(); renderMaskEditor(item, u);
   });
+  $("#selectSourceBtn").onclick = () => { u.masked = [...new Set([...u.masked, ...sourceIndexes])].sort((a,b)=>a-b); save(); renderMaskEditor(item, u); };
   $("#clearMasksBtn").onclick = () => { u.masked = []; save(); renderMaskEditor(item, u); };
   $("#goMaskStudyBtn").onclick = () => { state.studyMode = "mask-study"; renderStudy(); };
 }
 
 function renderMaskStudy(item, u) {
   if (!u.masked.length) {
-    $("#studyContent").innerHTML = `<div class="empty-state"><h2>가릴 어절이 아직 없어요.</h2><p>먼저 가리기 설정에서 암기할 부분을 터치해 선택하세요.</p></div>`;
+    $("#studyContent").innerHTML = `<div class="empty-state"><h2>가릴 어절이 아직 없어요.</h2><p>먼저 가리기 설정에서 암기할 부분을 선택하세요.</p></div>`;
     $("#studyFooterRight").innerHTML = `<button id="setupMaskBtn" class="primary-btn">가리기 설정</button>`;
     $("#setupMaskBtn").onclick = () => { state.studyMode = "mask-edit"; renderStudy(); };
     return;
   }
   const tokens = tokenize(item.originalText);
-  $("#studyContent").innerHTML = `<div class="helper">가려진 블록을 하나씩 터치해 정답을 확인하세요.</div><div class="mask-study">${tokens.map(t => t.isSpace ? esc(t.text) : `<span class="token ${u.masked.includes(t.index) ? "masked" : ""}" data-mask-token="${t.index}">${esc(t.text)}</span>`).join("")}</div>`;
-  $("#studyFooterRight").innerHTML = `<button id="revealAllBtn" class="ghost-btn">모두 공개</button> <button id="resetMaskBtn" class="primary-btn">다시 가리기</button>`;
-  document.querySelectorAll(".masked").forEach(el => el.onclick = () => el.classList.toggle("revealed"));
-  $("#revealAllBtn").onclick = () => document.querySelectorAll(".masked").forEach(el => el.classList.add("revealed"));
-  $("#resetMaskBtn").onclick = () => document.querySelectorAll(".masked").forEach(el => el.classList.remove("revealed"));
+  $("#studyContent").innerHTML = `<div class="helper">가려진 어절을 하나씩 터치하면 정답이 열립니다.</div><div class="mask-study">${tokens.map(t => {
+    if (t.isSpace) return esc(t.text);
+    const masked = u.masked.includes(t.index);
+    return `<span class="token ${masked ? "masked" : ""}" ${masked ? `data-reveal="${t.index}"` : ""}>${esc(t.text)}</span>`;
+  }).join("")}</div>`;
+  $("#studyFooterRight").innerHTML = `<button id="revealAllBtn" class="primary-btn">모두 공개</button>`;
+  $$('[data-reveal]').forEach(el => el.onclick = () => el.classList.toggle("revealed"));
+  $("#revealAllBtn").onclick = () => $$('[data-reveal]').forEach(el => el.classList.add("revealed"));
 }
 
-function normalizeFlexible(s) { return s.replace(/[\s.,!?·:;"'‘’“”()\[\]{}]/g, "").trim(); }
 function renderTyping(item, u) {
-  $("#studyContent").innerHTML = `<div class="typing-wrap"><div class="helper">현재 채점 방식: <strong>${gradingLabel(state.settings.gradingMode)}</strong></div><div class="typing-prompt">${esc(makeTypingPrompt(item, u.masked))}</div><textarea id="typingAnswer" class="typing-answer" placeholder="가려진 내용을 포함해 기억나는 문장을 입력하세요."></textarea><div id="typingResult"></div></div>`;
-  $("#studyFooterRight").innerHTML = `<button id="checkTypingBtn" class="primary-btn">채점하기</button>`;
-  $("#checkTypingBtn").onclick = () => gradeTyping(item, u);
-}
-function makeTypingPrompt(item, masked) {
-  if (!masked?.length) return `${item.originalText}\n\n※ 아직 가리기 설정이 없어 원문 전체를 보고 타이핑 연습합니다.`;
-  return tokenize(item.originalText).map(t => t.isSpace ? t.text : (masked.includes(t.index) ? "[          ]" : t.text)).join("");
-}
-function gradeTyping(item, u) {
-  const answer = $("#typingAnswer").value.trim();
-  const result = $("#typingResult");
-  if (!answer) return result.innerHTML = `<div class="result-box bad">답안을 입력하세요.</div>`;
-  u.attempts = (u.attempts ?? 0) + 1;
-  if (state.settings.gradingMode === "self") {
-    result.innerHTML = `<div class="result-box"><strong>교육과정 원문</strong><br>${esc(item.originalText)}<br><br><button id="selfGood" class="primary-btn">맞음</button> <button id="selfBad" class="ghost-btn">틀림</button></div>`;
-    $("#selfGood").onclick = () => { u.correct = (u.correct ?? 0) + 1; save(); result.innerHTML = `<div class="result-box good">정답으로 기록했습니다.</div>`; };
-    $("#selfBad").onclick = () => { save(); result.innerHTML = `<div class="result-box bad">오답으로 기록했습니다.</div>`; };
+  if (!u.masked.length) {
+    $("#studyContent").innerHTML = `<div class="empty-state"><h2>먼저 암기할 부분을 선택해 주세요.</h2><p>타이핑 학습은 가리기 설정에서 선택한 어절을 직접 입력하는 방식입니다.</p></div>`;
+    $("#studyFooterRight").innerHTML = `<button id="typingSetupBtn" class="primary-btn">가리기 설정</button>`;
+    $("#typingSetupBtn").onclick = () => { state.studyMode = "mask-edit"; renderStudy(); };
     return;
   }
-  const correct = state.settings.gradingMode === "strict" ? answer === item.originalText.trim() : normalizeFlexible(answer) === normalizeFlexible(item.originalText);
-  if (correct) u.correct = (u.correct ?? 0) + 1;
-  save();
-  result.innerHTML = `<div class="result-box ${correct ? "good" : "bad"}"><strong>${correct ? "정답입니다." : "원문과 차이가 있습니다."}</strong>${correct ? "" : `<br><br><strong>원문</strong><br>${esc(item.originalText)}`}</div>`;
-}
-function gradingLabel(mode) { return ({ flexible: "유연 채점", strict: "엄격 채점", self: "직접 확인" })[mode] ?? mode; }
-
-function validateImport(data) {
-  if (data?.schemaVersion !== 1 || data?.contentType !== "curriculum" || !Array.isArray(data.subjects)) throw new Error("지원하지 않는 자료 형식입니다.");
-  data.subjects.forEach(s => {
-    if (!s.id || !s.name || !Array.isArray(s.sections)) throw new Error("과목 구조가 올바르지 않습니다.");
-    s.sections.forEach(sec => {
-      if (!sec.id || !sec.name || !Array.isArray(sec.items)) throw new Error("영역 구조가 올바르지 않습니다.");
-      sec.items.forEach(i => { if (!i.id || typeof i.originalText !== "string") throw new Error("원문 항목 구조가 올바르지 않습니다."); });
-    });
-  });
-}
-function mergeImport(incoming) {
-  incoming.subjects.forEach(newSub => {
-    let sub = state.data.subjects.find(s => s.id === newSub.id);
-    if (!sub) { state.data.subjects.push(structuredClone(newSub)); return; }
-    newSub.sections.forEach(newSec => {
-      let sec = sub.sections.find(s => s.id === newSec.id);
-      if (!sec) { sub.sections.push(structuredClone(newSec)); return; }
-      newSec.items.forEach(newItem => {
-        const idx = sec.items.findIndex(i => i.id === newItem.id);
-        if (idx >= 0) sec.items[idx] = structuredClone(newItem); else sec.items.push(structuredClone(newItem));
-      });
-    });
-  });
-  const known = new Set(state.settings.visibleSubjects);
-  incoming.subjects.forEach(s => known.add(s.id));
-  state.settings.visibleSubjects = [...known];
-  save();
+  const tokens = tokenize(item.originalText);
+  let inputNo = 0;
+  const prompt = tokens.map(t => {
+    if (t.isSpace) return esc(t.text);
+    if (!u.masked.includes(t.index)) return `<span>${esc(t.text)}</span>`;
+    const n = inputNo++;
+    const width = Math.max(72, Math.min(220, t.text.length * 22 + 24));
+    return `<input class="inline-answer" data-answer-index="${n}" data-token-index="${t.index}" style="width:${width}px" autocomplete="off" aria-label="빈칸 ${n+1}" />`;
+  }).join("");
+  $("#studyContent").innerHTML = `<div class="helper">현재 채점 방식: <strong>${gradingLabel(state.settings.gradingMode)}</strong>. 설정에서 언제든 바꿀 수 있습니다.</div><div class="typing-inline">${prompt}</div><div id="typingResult"></div>`;
+  $("#studyFooterRight").innerHTML = `<button id="gradeBtn" class="primary-btn">채점하기</button>`;
+  $("#gradeBtn").onclick = () => gradeTyping(item, u);
 }
 
-function openSettings() {
-  const list = $("#subjectSettings");
-  list.innerHTML = allSubjects().map(s => `<label class="check-row"><input type="checkbox" value="${esc(s.id)}" ${state.settings.visibleSubjects.includes(s.id) ? "checked" : ""}> ${esc(s.name)}</label>`).join("");
-  document.querySelectorAll('input[name="gradingMode"]').forEach(r => r.checked = r.value === state.settings.gradingMode);
-  $("#aiProvider").value = state.settings.aiProvider;
-  $("#settingsDialog").showModal();
+function gradingLabel(mode) { return ({ flexible:"유연 채점", strict:"엄격 채점", self:"직접 확인" })[mode] || "유연 채점"; }
+function flexible(v) { return normalizeWord(v); }
+
+function gradeTyping(item, u) {
+  const tokens = tokenize(item.originalText);
+  const inputs = $$(".inline-answer");
+  const result = $("#typingResult");
+  u.attempts = (u.attempts || 0) + 1;
+  if (state.settings.gradingMode === "self") {
+    inputs.forEach(input => {
+      const expected = tokens[Number(input.dataset.tokenIndex)]?.text || "";
+      input.value = expected;
+      input.classList.add("answer-revealed");
+    });
+    result.innerHTML = `<div class="result-box"><strong>정답을 표시했습니다.</strong><br>직접 비교한 뒤 학습을 이어가세요.</div>`;
+    save(); return;
+  }
+  let correct = 0;
+  inputs.forEach(input => {
+    const expected = tokens[Number(input.dataset.tokenIndex)]?.text || "";
+    const ok = state.settings.gradingMode === "strict" ? input.value.trim() === expected.trim() : flexible(input.value) === flexible(expected);
+    input.classList.toggle("input-correct", ok);
+    input.classList.toggle("input-wrong", !ok);
+    if (!ok) input.title = `정답: ${expected}`;
+    if (ok) correct++;
+  });
+  const all = correct === inputs.length;
+  if (all) u.correct = (u.correct || 0) + 1;
+  result.innerHTML = `<div class="result-box ${all ? "good" : "bad"}"><strong>${correct} / ${inputs.length}</strong> 정답${all ? " · 완벽해요." : " · 틀린 칸에 마우스를 올리면 정답을 확인할 수 있어요."}</div>`;
+  save();
+}
+
+function renderSettings() {
+  $("#subjectSettings").innerHTML = allSubjects().map(s => `<label class="check-row"><input type="checkbox" value="${esc(s.id)}" ${state.settings.visibleSubjects.includes(s.id) ? "checked" : ""}> ${esc(s.name)}</label>`).join("");
+  $$('input[name="gradingMode"]').forEach(r => r.checked = r.value === state.settings.gradingMode);
+  $("#aiProvider").value = state.settings.aiProvider || "none";
+}
+
+function importPayload(payload) {
+  if (!payload || !Array.isArray(payload.subjects)) throw new Error("지원하지 않는 JSON 형식입니다.");
+  payload.subjects.forEach(subject => {
+    const existing = subjectData(subject.id);
+    if (!existing) { state.data.subjects.push(subject); return; }
+    const sectionMap = new Map((existing.sections || []).map(s => [s.id, s]));
+    (subject.sections || []).forEach(sec => sectionMap.set(sec.id, sec));
+    existing.name = subject.name || existing.name;
+    existing.sections = [...sectionMap.values()];
+  });
+  save();
 }
 
 $("#homeBtn").onclick = () => { state.view = "home"; render(); };
-$("#settingsBtn").onclick = openSettings;
 $("#importBtn").onclick = () => $("#importFile").click();
 $("#importFile").onchange = async e => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  try {
-    const data = JSON.parse(await file.text());
-    validateImport(data); mergeImport(data); state.view = "reader"; state.subjectId = data.subjects[0]?.id ?? state.subjectId; state.sectionId = null; state.itemId = null; render();
-    alert("교육과정 자료를 가져왔습니다.");
-  } catch (err) { alert(`가져오기 실패: ${err.message}`); }
+  const file = e.target.files[0]; if (!file) return;
+  try { importPayload(JSON.parse(await file.text())); alert("자료를 추가했습니다."); state.view = "reader"; render(); }
+  catch (err) { alert(err.message || "JSON 파일을 읽지 못했습니다."); }
   e.target.value = "";
 };
+$("#settingsBtn").onclick = () => { renderSettings(); $("#settingsDialog").showModal(); };
 $("#saveSettingsBtn").onclick = () => {
-  state.settings.visibleSubjects = [...document.querySelectorAll("#subjectSettings input:checked")].map(i => i.value);
-  state.settings.gradingMode = document.querySelector('input[name="gradingMode"]:checked')?.value ?? "flexible";
+  const checked = $$("#subjectSettings input:checked").map(i => i.value);
+  state.settings.visibleSubjects = checked.length ? checked : ["general"];
+  state.settings.gradingMode = $('input[name="gradingMode"]:checked')?.value || "flexible";
   state.settings.aiProvider = $("#aiProvider").value;
-  if (!state.settings.visibleSubjects.length) state.settings.visibleSubjects = ["general"];
   save(); $("#settingsDialog").close(); render();
 };
 
-state.view = "home";
-render();
+(async function init(){
+  await loadBundledData();
+  render();
+})();
