@@ -1,23 +1,49 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 5,
   "contentType": "curriculum",
-  "subjects": [
-    {
-      "id": "korean",
-      "name": "국어",
-      "sections": [
-        {
-          "id": "teaching",
-          "name": "교수·학습",
-          "items": [
-            {
-              "id": "kor-teaching-demo-001",
-              "title": "업로드 형식 예시",
-              "originalText": "이 위치에는 사용자가 제공한 교육과정 원문이 내용 변경 없이 그대로 들어갑니다."
-            }
-          ]
-        }
-      ]
-    }
-  ]
+  "subject": {
+    "id": "korean",
+    "name": "국어",
+    "sections": [
+      {
+        "id": "teaching",
+        "name": "교수·학습",
+        "group": "교육과정",
+        "items": [
+          {
+            "id": "kor-teaching-demo-001",
+            "title": "업로드 형식 예시",
+            "originalText": "이 위치에는 사용자가 제공한 교육과정 원문이 내용 변경 없이 그대로 들어갑니다.",
+            "source": {
+              "page": 1,
+              "document": "sample.pdf"
+            },
+            "highlightWords": ["교육과정 원문"],
+            "blocks": [
+              {
+                "type": "paragraph",
+                "segments": [
+                  { "text": "이 위치에는 사용자가 제공한 ", "highlight": false },
+                  { "text": "교육과정 원문", "highlight": true },
+                  { "text": "이 내용 변경 없이 그대로 들어갑니다.", "highlight": false }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "reviewItems": [
+      {
+        "id": "review-kor-demo-001",
+        "status": "pending",
+        "title": "검수함 예시",
+        "reason": "교육과정 관련 자료이지만 공식 학습 본문인지 불명확한 예시",
+        "suggestedSectionId": "teaching",
+        "suggestedSectionName": "교수·학습",
+        "originalText": "애매한 자료는 삭제하지 않고 검수함에 보관합니다.",
+        "source": { "page": 2 }
+      }
+    ]
+  }
 }
