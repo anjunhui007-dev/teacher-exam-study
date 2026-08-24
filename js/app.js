@@ -1,365 +1,45 @@
-const DATA_KEY = "tes_curriculum_v2";
-const USER_KEY = "tes_user_v2";
-const SETTINGS_KEY = "tes_settings_v2";
-const BUNDLE_MARKER_KEY = "tes_bundle_marker";
-const BUNDLE_MARKER = "general-solli-20260824-1";
-
-const DEFAULT_SUBJECTS = [
-  { id: "general", name: "총론" },
-  { id: "korean", name: "국어" },
-  { id: "ethics", name: "도덕" },
-  { id: "social", name: "사회" },
-  { id: "math", name: "수학" },
-  { id: "science", name: "과학" },
-  { id: "practical", name: "실과" },
-  { id: "pe", name: "체육" },
-  { id: "music", name: "음악" },
-  { id: "art", name: "미술" },
-  { id: "english", name: "영어" },
-  { id: "integrated", name: "통합교과" }
-];
-
-const EMPTY_DATA = {
-  schemaVersion: 2,
-  contentType: "curriculum",
-  subjects: DEFAULT_SUBJECTS.map(s => ({ ...s, sections: [] }))
-};
-
-const state = {
-  data: load(DATA_KEY, EMPTY_DATA),
-  user: load(USER_KEY, { itemState: {} }),
-  settings: load(SETTINGS_KEY, {
-    visibleSubjects: DEFAULT_SUBJECTS.map(s => s.id),
-    gradingMode: "flexible",
-    aiProvider: "none"
-  }),
-  subjectId: "general",
-  sectionId: null,
-  itemId: null,
-  view: "home",
-  studyMode: "mask-edit"
-};
-
-const $ = s => document.querySelector(s);
-const $$ = s => [...document.querySelectorAll(s)];
-const esc = (v = "") => String(v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c]));
-
-function clone(v) { return JSON.parse(JSON.stringify(v)); }
-function load(key, fallback) {
-  try { return JSON.parse(localStorage.getItem(key)) ?? clone(fallback); }
-  catch { return clone(fallback); }
-}
-function save() {
-  localStorage.setItem(DATA_KEY, JSON.stringify(state.data));
-  localStorage.setItem(USER_KEY, JSON.stringify(state.user));
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
-}
-
-function mergeSubject(subject, replace = true) {
-  const idx = state.data.subjects.findIndex(s => s.id === subject.id);
-  if (idx >= 0 && replace) state.data.subjects[idx] = subject;
-  else if (idx < 0) state.data.subjects.push(subject);
-}
-
-async function loadBundledData() {
-  if (localStorage.getItem(BUNDLE_MARKER_KEY) === BUNDLE_MARKER) return;
-  try {
-    const res = await fetch("./data/general_curriculum_solli.json", { cache: "no-store" });
-    if (!res.ok) return;
-    const bundle = await res.json();
-    (bundle.subjects || []).forEach(subject => mergeSubject(subject, true));
-    localStorage.setItem(BUNDLE_MARKER_KEY, BUNDLE_MARKER);
-    save();
-  } catch (err) {
-    console.info("Bundled curriculum data is available after deployment or can be uploaded manually.", err);
-  }
-}
-
-function allSubjects() {
-  const map = new Map(DEFAULT_SUBJECTS.map(s => [s.id, s]));
-  (state.data.subjects || []).forEach(s => map.set(s.id, { id: s.id, name: s.name }));
-  return [...map.values()];
-}
-function visibleSubjects() { return allSubjects().filter(s => state.settings.visibleSubjects.includes(s.id)); }
-function subjectData(id) { return state.data.subjects.find(s => s.id === id); }
-function currentSubject() { return subjectData(state.subjectId); }
-function currentSection() { return currentSubject()?.sections?.find(s => s.id === state.sectionId); }
-function currentItem() { return currentSection()?.items?.find(i => i.id === state.itemId); }
-
-function ensureSelection() {
-  const visible = visibleSubjects();
-  if (!visible.some(s => s.id === state.subjectId)) state.subjectId = visible[0]?.id ?? null;
-  const subject = currentSubject();
-  if (!subject) { state.sectionId = state.itemId = null; return; }
-  if (!subject.sections?.some(s => s.id === state.sectionId)) state.sectionId = subject.sections?.[0]?.id ?? null;
-  const section = currentSection();
-  if (!section?.items?.some(i => i.id === state.itemId)) state.itemId = section?.items?.[0]?.id ?? null;
-}
-
-function render() {
-  ensureSelection();
-  renderSubjectBar();
-  renderSectionBar();
-  if (state.view === "home") renderHome();
-  else if (state.view === "study") renderStudy();
-  else renderReader();
-}
-
-function renderSubjectBar() {
-  const bar = $("#subjectBar");
-  bar.innerHTML = visibleSubjects().map(s => `<button class="nav-tab ${s.id === state.subjectId ? "active" : ""}" data-subject="${esc(s.id)}">${esc(s.name)}</button>`).join("");
-  bar.querySelectorAll("[data-subject]").forEach(btn => btn.onclick = () => {
-    state.subjectId = btn.dataset.subject;
-    state.sectionId = state.itemId = null;
-    state.view = "reader";
-    render();
-  });
-}
-
-function renderSectionBar() {
-  const subject = currentSubject();
-  const bar = $("#sectionBar");
-  bar.innerHTML = (subject?.sections ?? []).map(s => `<button class="nav-tab ${s.id === state.sectionId ? "active" : ""}" data-section="${esc(s.id)}">${esc(s.name)}</button>`).join("");
-  bar.querySelectorAll("[data-section]").forEach(btn => btn.onclick = () => {
-    state.sectionId = btn.dataset.section;
-    state.itemId = null;
-    state.view = "reader";
-    render();
-  });
-}
-
-function countItems() {
-  return state.data.subjects.reduce((a,s) => a + (s.sections || []).reduce((b,sec) => b + (sec.items?.length || 0), 0), 0);
-}
-
-function renderHome() {
-  const masked = Object.values(state.user.itemState).filter(x => x.masked?.length).length;
-  const attempts = Object.values(state.user.itemState).reduce((a,x) => a + (x.attempts || 0), 0);
-  $("#appMain").innerHTML = `
-    <section class="hero"><div><span class="eyebrow">Curriculum Study</span><h1>교육과정을 내 방식대로 외우세요.</h1><p>원문 형식과 강조 표시를 보존하고, 직접 암기할 어절을 골라 가리기와 타이핑으로 학습합니다.</p></div></section>
-    <div class="metric-row">
-      <article class="card metric"><span>등록 원문 항목</span><strong>${countItems()}</strong></article>
-      <article class="card metric"><span>가리기 설정</span><strong>${masked}</strong></article>
-      <article class="card metric"><span>타이핑 시도</span><strong>${attempts}</strong></article>
-    </div>
-    <div class="dashboard-grid">
-      <article class="card panel"><h2>총론 실제 자료 탑재</h2><p>업로드한 HWPX의 문단, 표, 빨간 글자 강조를 보존해 총론 데이터로 변환했습니다. 상단의 <strong>총론</strong>을 눌러 확인하세요.</p><div class="quick-actions"><button id="openGeneralBtn" class="primary-btn">총론 열기</button><button id="homeImportBtn" class="ghost-btn">JSON 자료 업로드</button></div></article>
-      <article class="card panel"><h2>빨간 글자 활용</h2><p>원문에서는 붉은 강조로 표시되고, 가리기 설정에서 <strong>붉은 강조 모두 선택</strong>으로 암기 범위를 한 번에 지정할 수 있습니다.</p></article>
-    </div>`;
-  $("#openGeneralBtn").onclick = () => { state.subjectId = "general"; state.sectionId = state.itemId = null; state.view = "reader"; render(); };
-  $("#homeImportBtn").onclick = () => $("#importFile").click();
-}
-
-function renderSegments(segments = []) {
-  return segments.map(s => `<span class="${s.highlight ? "source-highlight" : ""}">${esc(s.text)}</span>`).join("");
-}
-
-function renderTable(block) {
-  const occupied = new Set();
-  const byPos = new Map((block.cells || []).map(c => [`${c.row}:${c.col}`, c]));
-  let html = `<div class="table-scroll"><table class="source-table"><tbody>`;
-  for (let r = 0; r < (block.rows || 0); r++) {
-    html += "<tr>";
-    for (let c = 0; c < (block.cols || 0); c++) {
-      if (occupied.has(`${r}:${c}`)) continue;
-      const cell = byPos.get(`${r}:${c}`);
-      if (!cell) { html += "<td></td>"; continue; }
-      for (let rr = r; rr < r + (cell.rowspan || 1); rr++) for (let cc = c; cc < c + (cell.colspan || 1); cc++) if (rr !== r || cc !== c) occupied.add(`${rr}:${cc}`);
-      html += `<td rowspan="${cell.rowspan || 1}" colspan="${cell.colspan || 1}">${renderSegments(cell.segments)}</td>`;
-    }
-    html += "</tr>";
-  }
-  return html + "</tbody></table></div>";
-}
-
-function renderBlocks(item) {
-  if (!item?.blocks?.length) return `<div class="original-text">${esc(item?.originalText || "")}</div>`;
-  return `<div class="source-document">${item.blocks.map(block => {
-    if (block.type === "table") return renderTable(block);
-    return `<p>${renderSegments(block.segments)}</p>`;
-  }).join("")}</div>`;
-}
-
-function renderReader() {
-  const subject = currentSubject();
-  const section = currentSection();
-  const item = currentItem();
-  if (!subject) return renderHome();
-  const items = section?.items ?? [];
-  $("#appMain").innerHTML = `
-    <section class="hero compact"><div><span class="eyebrow">${esc(subject.name)}</span><h1>${esc(section?.name || "자료 없음")}</h1><p>${items.length ? "왼쪽 목차에서 세부 항목을 선택하세요." : "아직 이 영역에 등록된 자료가 없습니다."}</p></div></section>
-    <div class="content-layout">
-      <aside class="card toc"><div class="toc-title">세부 목차</div>${items.length ? items.map(i => `<button class="${i.id === state.itemId ? "active" : ""}" data-item="${esc(i.id)}">${esc(i.title || "제목 없음")}</button>`).join("") : `<div class="empty-state small">자료 없음</div>`}</aside>
-      <article class="card reader">${item ? `
-        <div class="breadcrumb">${esc(subject.name)} / ${esc(section.name)}</div>
-        <div class="reader-heading"><div><h1>${esc(item.title || "교육과정 원문")}</h1><p class="reader-note">원문 속 빨간 글자는 업로드된 HWPX의 강조를 그대로 반영했습니다.</p></div><span class="highlight-legend"><i></i> 원문 강조</span></div>
-        ${renderBlocks(item)}
-        <div class="reader-actions"><button id="maskStartBtn" class="soft-btn">가리기 설정</button><button id="typingStartBtn" class="primary-btn">타이핑 학습</button></div>` : `<div class="empty-state"><h2>등록된 원문이 없어요.</h2><p>이 채팅에서 변환한 JSON 파일을 자료 업로드로 추가할 수 있습니다.</p><button id="emptyImportBtn" class="primary-btn">자료 업로드</button></div>`}</article>
-    </div>`;
-  $$('[data-item]').forEach(btn => btn.onclick = () => { state.itemId = btn.dataset.item; render(); });
-  if (item) {
-    $("#maskStartBtn").onclick = () => { state.view = "study"; state.studyMode = "mask-edit"; render(); };
-    $("#typingStartBtn").onclick = () => { state.view = "study"; state.studyMode = "typing"; render(); };
-  } else if ($("#emptyImportBtn")) $("#emptyImportBtn").onclick = () => $("#importFile").click();
-}
-
-function tokenize(text) {
-  return String(text || "").split(/(\s+)/).map((text, index) => ({ index, text, isSpace: /^\s+$/.test(text) }));
-}
-function itemUserState(id) {
-  state.user.itemState[id] ??= { masked: [], attempts: 0, correct: 0 };
-  return state.user.itemState[id];
-}
-function normalizeWord(v) { return String(v || "").toLowerCase().replace(/[\s.,!?;:'"“”‘’·⋅()\[\]{}<>/\\\-_~`]+/g, ""); }
-function highlightedTokenIndexes(item) {
-  const terms = new Set((item.highlightWords || []).map(normalizeWord).filter(Boolean));
-  return tokenize(item.originalText).filter(t => !t.isSpace && terms.has(normalizeWord(t.text))).map(t => t.index);
-}
-
-function renderStudy() {
-  const item = currentItem();
-  if (!item) { state.view = "reader"; return render(); }
-  const u = itemUserState(item.id);
-  const subject = currentSubject(), section = currentSection();
-  $("#appMain").innerHTML = `
-    <article class="card study-card">
-      <div class="study-titlebar">
-        <div><span class="eyebrow">${esc(subject.name)} · ${esc(section.name)}</span><h2>${esc(item.title || "학습")}</h2></div>
-        <div class="mode-switch"><button data-mode="mask-edit" class="${state.studyMode === "mask-edit" ? "active" : ""}">가리기 설정</button><button data-mode="mask-study" class="${state.studyMode === "mask-study" ? "active" : ""}">가리기 학습</button><button data-mode="typing" class="${state.studyMode === "typing" ? "active" : ""}">타이핑</button></div>
-      </div>
-      <div id="studyContent"></div>
-      <div class="study-footer"><button id="backReaderBtn" class="ghost-btn">원문으로 돌아가기</button><div id="studyFooterRight"></div></div>
-    </article>`;
-  $$('[data-mode]').forEach(btn => btn.onclick = () => { state.studyMode = btn.dataset.mode; renderStudy(); });
-  $("#backReaderBtn").onclick = () => { state.view = "reader"; render(); };
-  if (state.studyMode === "mask-edit") renderMaskEditor(item, u);
-  if (state.studyMode === "mask-study") renderMaskStudy(item, u);
-  if (state.studyMode === "typing") renderTyping(item, u);
-}
-
-function renderMaskEditor(item, u) {
-  const tokens = tokenize(item.originalText);
-  const sourceIndexes = highlightedTokenIndexes(item);
-  $("#studyContent").innerHTML = `<div class="helper">암기하고 싶은 <strong>어절을 터치</strong>하세요. 붉은색 테두리 어절은 원문에서 빨간 글자로 강조된 부분입니다.</div><div id="tokenEditor" class="token-editor">${tokens.map(t => t.isSpace ? esc(t.text) : `<span class="token selectable ${u.masked.includes(t.index) ? "selected" : ""} ${sourceIndexes.includes(t.index) ? "source-token" : ""}" data-token="${t.index}">${esc(t.text)}</span>`).join("")}</div>`;
-  $("#studyFooterRight").innerHTML = `<button id="selectSourceBtn" class="soft-btn">붉은 강조 모두 선택</button> <button id="clearMasksBtn" class="ghost-btn">전체 해제</button> <button id="goMaskStudyBtn" class="primary-btn">가리기 학습 시작</button>`;
-  $$('[data-token]').forEach(el => el.onclick = () => {
-    const idx = Number(el.dataset.token);
-    u.masked = u.masked.includes(idx) ? u.masked.filter(x => x !== idx) : [...u.masked, idx].sort((a,b)=>a-b);
-    save(); renderMaskEditor(item, u);
-  });
-  $("#selectSourceBtn").onclick = () => { u.masked = [...new Set([...u.masked, ...sourceIndexes])].sort((a,b)=>a-b); save(); renderMaskEditor(item, u); };
-  $("#clearMasksBtn").onclick = () => { u.masked = []; save(); renderMaskEditor(item, u); };
-  $("#goMaskStudyBtn").onclick = () => { state.studyMode = "mask-study"; renderStudy(); };
-}
-
-function renderMaskStudy(item, u) {
-  if (!u.masked.length) {
-    $("#studyContent").innerHTML = `<div class="empty-state"><h2>가릴 어절이 아직 없어요.</h2><p>먼저 가리기 설정에서 암기할 부분을 선택하세요.</p></div>`;
-    $("#studyFooterRight").innerHTML = `<button id="setupMaskBtn" class="primary-btn">가리기 설정</button>`;
-    $("#setupMaskBtn").onclick = () => { state.studyMode = "mask-edit"; renderStudy(); };
-    return;
-  }
-  const tokens = tokenize(item.originalText);
-  $("#studyContent").innerHTML = `<div class="helper">가려진 어절을 하나씩 터치하면 정답이 열립니다.</div><div class="mask-study">${tokens.map(t => {
-    if (t.isSpace) return esc(t.text);
-    const masked = u.masked.includes(t.index);
-    return `<span class="token ${masked ? "masked" : ""}" ${masked ? `data-reveal="${t.index}"` : ""}>${esc(t.text)}</span>`;
-  }).join("")}</div>`;
-  $("#studyFooterRight").innerHTML = `<button id="revealAllBtn" class="primary-btn">모두 공개</button>`;
-  $$('[data-reveal]').forEach(el => el.onclick = () => el.classList.toggle("revealed"));
-  $("#revealAllBtn").onclick = () => $$('[data-reveal]').forEach(el => el.classList.add("revealed"));
-}
-
-function renderTyping(item, u) {
-  if (!u.masked.length) {
-    $("#studyContent").innerHTML = `<div class="empty-state"><h2>먼저 암기할 부분을 선택해 주세요.</h2><p>타이핑 학습은 가리기 설정에서 선택한 어절을 직접 입력하는 방식입니다.</p></div>`;
-    $("#studyFooterRight").innerHTML = `<button id="typingSetupBtn" class="primary-btn">가리기 설정</button>`;
-    $("#typingSetupBtn").onclick = () => { state.studyMode = "mask-edit"; renderStudy(); };
-    return;
-  }
-  const tokens = tokenize(item.originalText);
-  let inputNo = 0;
-  const prompt = tokens.map(t => {
-    if (t.isSpace) return esc(t.text);
-    if (!u.masked.includes(t.index)) return `<span>${esc(t.text)}</span>`;
-    const n = inputNo++;
-    const width = Math.max(72, Math.min(220, t.text.length * 22 + 24));
-    return `<input class="inline-answer" data-answer-index="${n}" data-token-index="${t.index}" style="width:${width}px" autocomplete="off" aria-label="빈칸 ${n+1}" />`;
-  }).join("");
-  $("#studyContent").innerHTML = `<div class="helper">현재 채점 방식: <strong>${gradingLabel(state.settings.gradingMode)}</strong>. 설정에서 언제든 바꿀 수 있습니다.</div><div class="typing-inline">${prompt}</div><div id="typingResult"></div>`;
-  $("#studyFooterRight").innerHTML = `<button id="gradeBtn" class="primary-btn">채점하기</button>`;
-  $("#gradeBtn").onclick = () => gradeTyping(item, u);
-}
-
-function gradingLabel(mode) { return ({ flexible:"유연 채점", strict:"엄격 채점", self:"직접 확인" })[mode] || "유연 채점"; }
-function flexible(v) { return normalizeWord(v); }
-
-function gradeTyping(item, u) {
-  const tokens = tokenize(item.originalText);
-  const inputs = $$(".inline-answer");
-  const result = $("#typingResult");
-  u.attempts = (u.attempts || 0) + 1;
-  if (state.settings.gradingMode === "self") {
-    inputs.forEach(input => {
-      const expected = tokens[Number(input.dataset.tokenIndex)]?.text || "";
-      input.value = expected;
-      input.classList.add("answer-revealed");
-    });
-    result.innerHTML = `<div class="result-box"><strong>정답을 표시했습니다.</strong><br>직접 비교한 뒤 학습을 이어가세요.</div>`;
-    save(); return;
-  }
-  let correct = 0;
-  inputs.forEach(input => {
-    const expected = tokens[Number(input.dataset.tokenIndex)]?.text || "";
-    const ok = state.settings.gradingMode === "strict" ? input.value.trim() === expected.trim() : flexible(input.value) === flexible(expected);
-    input.classList.toggle("input-correct", ok);
-    input.classList.toggle("input-wrong", !ok);
-    if (!ok) input.title = `정답: ${expected}`;
-    if (ok) correct++;
-  });
-  const all = correct === inputs.length;
-  if (all) u.correct = (u.correct || 0) + 1;
-  result.innerHTML = `<div class="result-box ${all ? "good" : "bad"}"><strong>${correct} / ${inputs.length}</strong> 정답${all ? " · 완벽해요." : " · 틀린 칸에 마우스를 올리면 정답을 확인할 수 있어요."}</div>`;
-  save();
-}
-
-function renderSettings() {
-  $("#subjectSettings").innerHTML = allSubjects().map(s => `<label class="check-row"><input type="checkbox" value="${esc(s.id)}" ${state.settings.visibleSubjects.includes(s.id) ? "checked" : ""}> ${esc(s.name)}</label>`).join("");
-  $$('input[name="gradingMode"]').forEach(r => r.checked = r.value === state.settings.gradingMode);
-  $("#aiProvider").value = state.settings.aiProvider || "none";
-}
-
-function importPayload(payload) {
-  if (!payload || !Array.isArray(payload.subjects)) throw new Error("지원하지 않는 JSON 형식입니다.");
-  payload.subjects.forEach(subject => {
-    const existing = subjectData(subject.id);
-    if (!existing) { state.data.subjects.push(subject); return; }
-    const sectionMap = new Map((existing.sections || []).map(s => [s.id, s]));
-    (subject.sections || []).forEach(sec => sectionMap.set(sec.id, sec));
-    existing.name = subject.name || existing.name;
-    existing.sections = [...sectionMap.values()];
-  });
-  save();
-}
-
-$("#homeBtn").onclick = () => { state.view = "home"; render(); };
-$("#importBtn").onclick = () => $("#importFile").click();
-$("#importFile").onchange = async e => {
-  const file = e.target.files[0]; if (!file) return;
-  try { importPayload(JSON.parse(await file.text())); alert("자료를 추가했습니다."); state.view = "reader"; render(); }
-  catch (err) { alert(err.message || "JSON 파일을 읽지 못했습니다."); }
-  e.target.value = "";
-};
-$("#settingsBtn").onclick = () => { renderSettings(); $("#settingsDialog").showModal(); };
-$("#saveSettingsBtn").onclick = () => {
-  const checked = $$("#subjectSettings input:checked").map(i => i.value);
-  state.settings.visibleSubjects = checked.length ? checked : ["general"];
-  state.settings.gradingMode = $('input[name="gradingMode"]:checked')?.value || "flexible";
-  state.settings.aiProvider = $("#aiProvider").value;
-  save(); $("#settingsDialog").close(); render();
-};
-
-(async function init(){
-  await loadBundledData();
-  render();
-})();
+const DATA_KEY="tes_curriculum_v2",USER_KEY="tes_user_v2",SETTINGS_KEY="tes_settings_v2",BUNDLE_MARKER_KEY="tes_bundle_marker",BUNDLE_MARKER="general-solli-20260824-1";
+const DEFAULT_SUBJECTS=[["general","총론"],["korean","국어"],["ethics","도덕"],["social","사회"],["math","수학"],["science","과학"],["practical","실과"],["pe","체육"],["music","음악"],["art","미술"],["english","영어"],["integrated","통합교과"]].map(([id,name])=>({id,name}));
+const EMPTY_DATA={schemaVersion:2,contentType:"curriculum",subjects:DEFAULT_SUBJECTS.map(s=>({...s,sections:[]}))};
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],clone=v=>JSON.parse(JSON.stringify(v));
+const esc=(v="")=>String(v).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+function load(k,f){try{return JSON.parse(localStorage.getItem(k))??clone(f)}catch{return clone(f)}}
+const state={data:load(DATA_KEY,EMPTY_DATA),user:load(USER_KEY,{itemState:{}}),settings:load(SETTINGS_KEY,{visibleSubjects:DEFAULT_SUBJECTS.map(s=>s.id),gradingMode:"flexible",aiProvider:"none"}),subjectId:"general",sectionId:null,itemId:null,view:"home",studyMode:"mask-edit",weaknessOnly:false};
+function save(){localStorage.setItem(DATA_KEY,JSON.stringify(state.data));localStorage.setItem(USER_KEY,JSON.stringify(state.user));localStorage.setItem(SETTINGS_KEY,JSON.stringify(state.settings));renderWeaknessBadge()}
+function mergeSubject(subject,replace=true){const i=state.data.subjects.findIndex(s=>s.id===subject.id);if(i>=0&&replace)state.data.subjects[i]=subject;else if(i<0)state.data.subjects.push(subject)}
+async function loadBundledData(){if(localStorage.getItem(BUNDLE_MARKER_KEY)===BUNDLE_MARKER)return;try{const r=await fetch("./data/general_curriculum_solli.json",{cache:"no-store"});if(!r.ok)return;const b=await r.json();(b.subjects||[]).forEach(s=>mergeSubject(s,true));localStorage.setItem(BUNDLE_MARKER_KEY,BUNDLE_MARKER);save()}catch(e){console.info("Bundled data can also be uploaded manually",e)}}
+function allSubjects(){const m=new Map(DEFAULT_SUBJECTS.map(s=>[s.id,s]));state.data.subjects.forEach(s=>m.set(s.id,{id:s.id,name:s.name}));return[...m.values()]}
+const visibleSubjects=()=>allSubjects().filter(s=>state.settings.visibleSubjects.includes(s.id));
+const subjectData=id=>state.data.subjects.find(s=>s.id===id),currentSubject=()=>subjectData(state.subjectId),currentSection=()=>currentSubject()?.sections?.find(s=>s.id===state.sectionId),currentItem=()=>currentSection()?.items?.find(i=>i.id===state.itemId);
+function findItem(id){for(const subject of state.data.subjects)for(const section of(subject.sections||[])){const item=(section.items||[]).find(i=>i.id===id);if(item)return{subject,section,item}}return null}
+function ensureSelection(){const v=visibleSubjects();if(!v.some(s=>s.id===state.subjectId))state.subjectId=v[0]?.id??null;const s=currentSubject();if(!s){state.sectionId=state.itemId=null;return}if(!s.sections?.some(x=>x.id===state.sectionId))state.sectionId=s.sections?.[0]?.id??null;const sec=currentSection();if(!sec?.items?.some(x=>x.id===state.itemId))state.itemId=sec?.items?.[0]?.id??null}
+function render(){ensureSelection();renderSubjectBar();renderSectionBar();renderWeaknessBadge();if(state.view==="home")renderHome();else if(state.view==="study")renderStudy();else if(state.view==="weakness")renderWeakness();else renderReader()}
+function renderSubjectBar(){const b=$("#subjectBar");b.style.display=state.view==="weakness"?"none":"flex";b.innerHTML=visibleSubjects().map(s=>`<button class="nav-tab ${s.id===state.subjectId?"active":""}" data-subject="${esc(s.id)}">${esc(s.name)}</button>`).join("");b.querySelectorAll("[data-subject]").forEach(x=>x.onclick=()=>{state.subjectId=x.dataset.subject;state.sectionId=state.itemId=null;state.view="reader";render()})}
+function renderSectionBar(){const b=$("#sectionBar");b.style.display=state.view==="weakness"?"none":"flex";b.innerHTML=(currentSubject()?.sections||[]).map(s=>`<button class="nav-tab ${s.id===state.sectionId?"active":""}" data-section="${esc(s.id)}">${esc(s.name)}</button>`).join("");b.querySelectorAll("[data-section]").forEach(x=>x.onclick=()=>{state.sectionId=x.dataset.section;state.itemId=null;state.view="reader";render()})}
+function countItems(){return state.data.subjects.reduce((a,s)=>a+(s.sections||[]).reduce((b,x)=>b+(x.items?.length||0),0),0)}
+function weaknessEntries(){return Object.entries(state.user.itemState).filter(([,u])=>(u.wrongTokens?.length||0)>0).map(([id,u])=>({id,u,found:findItem(id)})).filter(x=>x.found)}
+function renderWeaknessBadge(){const n=weaknessEntries().length,b=$("#weaknessBadge");if(!b)return;b.textContent=n;b.classList.toggle("hidden",!n)}
+function renderHome(){const masked=Object.values(state.user.itemState).filter(x=>x.masked?.length).length,attempts=Object.values(state.user.itemState).reduce((a,x)=>a+(x.attempts||0),0),weak=weaknessEntries().length;$("#appMain").innerHTML=`<section class="hero"><div><span class="eyebrow">Curriculum Study</span><h1>교육과정을 내 방식대로 외우세요.</h1><p>원문과 강조를 보존하고, 선택한 어절만 가리거나 직접 입력해 학습합니다.</p></div></section><div class="metric-row"><article class="card metric"><span>등록 원문</span><strong>${countItems()}</strong></article><article class="card metric"><span>가리기 설정</span><strong>${masked}</strong></article><article class="card metric"><span>약점 항목</span><strong>${weak}</strong></article></div><div class="dashboard-grid"><article class="card panel"><h2>바로 학습하기</h2><p>타이핑 빈칸은 답을 입력하고 다음 칸으로 이동하면 자동 채점됩니다. 틀린 어절은 약점 보충에 자동 저장됩니다.</p><div class="quick-actions"><button id="openGeneralBtn" class="primary-btn">총론 열기</button><button id="openWeakBtn" class="ghost-btn">약점 보충</button></div></article><article class="card panel"><h2>자료 추가</h2><p>이 채팅에서 변환한 JSON을 업로드하면 기존 과목 구조에 추가됩니다.</p><button id="homeImportBtn" class="ghost-btn">JSON 자료 업로드</button></article></div>`;$("#openGeneralBtn").onclick=()=>{state.subjectId="general";state.sectionId=state.itemId=null;state.view="reader";render()};$("#openWeakBtn").onclick=()=>{state.view="weakness";render()};$("#homeImportBtn").onclick=()=>$("#importFile").click()}
+function renderSegments(segs=[]){return segs.map(s=>`<span class="${s.highlight?"source-highlight":""}">${esc(s.text)}</span>`).join("")}
+function renderTable(block){const occupied=new Set(),by=new Map((block.cells||[]).map(c=>[`${c.row}:${c.col}`,c]));let h='<div class="table-scroll"><table class="source-table"><tbody>';for(let r=0;r<(block.rows||0);r++){h+="<tr>";for(let c=0;c<(block.cols||0);c++){if(occupied.has(`${r}:${c}`))continue;const x=by.get(`${r}:${c}`);if(!x){h+="<td></td>";continue}for(let rr=r;rr<r+(x.rowspan||1);rr++)for(let cc=c;cc<c+(x.colspan||1);cc++)if(rr!==r||cc!==c)occupied.add(`${rr}:${cc}`);h+=`<td rowspan="${x.rowspan||1}" colspan="${x.colspan||1}">${renderSegments(x.segments)}</td>`}h+="</tr>"}return h+="</tbody></table></div>"}
+function renderBlocks(item){if(!item?.blocks?.length)return`<div class="original-text">${esc(item?.originalText||"")}</div>`;return`<div class="source-document">${item.blocks.map(b=>b.type==="table"?renderTable(b):`<p>${renderSegments(b.segments)}</p>`).join("")}</div>`}
+function renderReader(){const subject=currentSubject(),section=currentSection(),item=currentItem();if(!subject)return renderHome();const items=section?.items||[];$("#appMain").innerHTML=`<section class="hero compact"><div><span class="eyebrow">${esc(subject.name)}</span><h1>${esc(section?.name||"자료 없음")}</h1><p>${items.length?"왼쪽 목차에서 세부 항목을 선택하세요.":"아직 이 영역에 자료가 없습니다."}</p></div></section><div class="content-layout"><aside class="card toc"><div class="toc-title">세부 목차</div>${items.length?items.map(i=>`<button class="${i.id===state.itemId?"active":""}" data-item="${esc(i.id)}">${esc(i.title||"제목 없음")}</button>`).join(""):'<div class="empty-state small">자료 없음</div>'}</aside><article class="card reader">${item?`<div class="breadcrumb">${esc(subject.name)} / ${esc(section.name)}</div><div class="reader-heading"><div><h1>${esc(item.title||"교육과정 원문")}</h1><p class="reader-note">붉은 글자는 원문 HWPX의 강조를 반영합니다.</p></div><span class="highlight-legend"><i></i> 원문 강조</span></div>${renderBlocks(item)}<div class="reader-actions"><button id="maskStartBtn" class="soft-btn">가리기 설정</button><button id="typingStartBtn" class="primary-btn">타이핑 학습</button></div>`:'<div class="empty-state"><h2>등록된 원문이 없어요.</h2><button id="emptyImportBtn" class="primary-btn">자료 업로드</button></div>'}</article></div>`;$$('[data-item]').forEach(b=>b.onclick=()=>{state.itemId=b.dataset.item;render()});if(item){$("#maskStartBtn").onclick=()=>{state.view="study";state.studyMode="mask-edit";state.weaknessOnly=false;render()};$("#typingStartBtn").onclick=()=>{state.view="study";state.studyMode="typing";state.weaknessOnly=false;render()}}else if($("#emptyImportBtn"))$("#emptyImportBtn").onclick=()=>$("#importFile").click()}
+const tokenize=text=>String(text||"").split(/(\s+)/).map((text,index)=>({index,text,isSpace:/^\s+$/.test(text)}));
+function itemUserState(id){state.user.itemState[id]??={masked:[],attempts:0,correct:0,wrongTokens:[],wrongCount:0};state.user.itemState[id].wrongTokens??=[];return state.user.itemState[id]}
+const normalizeWord=v=>String(v||"").toLowerCase().replace(/[\s.,!?;:'"“”‘’·⋅()\[\]{}<>/\\\-_~`]+/g,"");
+function highlightedTokenIndexes(item){const terms=new Set((item.highlightWords||[]).map(normalizeWord).filter(Boolean));return tokenize(item.originalText).filter(t=>!t.isSpace&&terms.has(normalizeWord(t.text))).map(t=>t.index)}
+function renderStudy(){const item=currentItem();if(!item){state.view="reader";return render()}const u=itemUserState(item.id),subject=currentSubject(),section=currentSection();$("#appMain").innerHTML=`<article class="card study-card"><div class="study-titlebar"><div><span class="eyebrow">${esc(subject.name)} · ${esc(section.name)}</span><h2>${esc(item.title||"학습")}${state.weaknessOnly?' <span class="weak-label">약점 보충</span>':''}</h2></div><div class="mode-switch"><button data-mode="mask-edit" class="${state.studyMode==="mask-edit"?"active":""}">가리기 설정</button><button data-mode="mask-study" class="${state.studyMode==="mask-study"?"active":""}">가리기 학습</button><button data-mode="typing" class="${state.studyMode==="typing"?"active":""}">타이핑</button></div></div><div id="studyContent"></div><div class="study-footer"><button id="backReaderBtn" class="ghost-btn">${state.weaknessOnly?"약점 보충으로":"원문으로"} 돌아가기</button><div id="studyFooterRight"></div></div></article>`;$$('[data-mode]').forEach(b=>b.onclick=()=>{state.studyMode=b.dataset.mode;renderStudy()});$("#backReaderBtn").onclick=()=>{state.view=state.weaknessOnly?"weakness":"reader";state.weaknessOnly=false;render()};if(state.studyMode==="mask-edit")renderMaskEditor(item,u);if(state.studyMode==="mask-study")renderMaskStudy(item,u);if(state.studyMode==="typing")renderTyping(item,u)}
+function renderMaskEditor(item,u){const ts=tokenize(item.originalText),src=highlightedTokenIndexes(item);$("#studyContent").innerHTML=`<div class="helper">암기할 <strong>어절을 터치</strong>하세요. 붉은 밑줄은 원문에서 강조된 부분입니다.</div><div class="token-editor">${ts.map(t=>t.isSpace?esc(t.text):`<span class="token selectable ${u.masked.includes(t.index)?"selected":""} ${src.includes(t.index)?"source-token":""}" data-token="${t.index}">${esc(t.text)}</span>`).join("")}</div>`;$("#studyFooterRight").innerHTML='<button id="selectSourceBtn" class="soft-btn">붉은 강조 모두 선택</button> <button id="clearMasksBtn" class="ghost-btn">전체 해제</button> <button id="goMaskStudyBtn" class="primary-btn">학습 시작</button>';$$('[data-token]').forEach(el=>el.onclick=()=>{const i=+el.dataset.token;u.masked=u.masked.includes(i)?u.masked.filter(x=>x!==i):[...u.masked,i].sort((a,b)=>a-b);save();renderMaskEditor(item,u)});$("#selectSourceBtn").onclick=()=>{u.masked=[...new Set([...u.masked,...src])].sort((a,b)=>a-b);save();renderMaskEditor(item,u)};$("#clearMasksBtn").onclick=()=>{u.masked=[];save();renderMaskEditor(item,u)};$("#goMaskStudyBtn").onclick=()=>{state.studyMode="mask-study";renderStudy()}}
+function renderMaskStudy(item,u){const mask=state.weaknessOnly&&u.wrongTokens.length?u.wrongTokens:u.masked;if(!mask.length){$("#studyContent").innerHTML='<div class="empty-state"><h2>가릴 어절이 없어요.</h2></div>';return}const ts=tokenize(item.originalText);$("#studyContent").innerHTML=`<div class="helper">가려진 부분을 터치하면 정답이 열립니다.</div><div class="mask-study">${ts.map(t=>t.isSpace?esc(t.text):`<span class="token ${mask.includes(t.index)?"masked":""}" ${mask.includes(t.index)?`data-reveal="${t.index}"`:""}>${esc(t.text)}</span>`).join("")}</div>`;$("#studyFooterRight").innerHTML='<button id="revealAllBtn" class="primary-btn">모두 공개</button>';$$('[data-reveal]').forEach(el=>el.onclick=()=>el.classList.toggle("revealed"));$("#revealAllBtn").onclick=()=>$$('[data-reveal]').forEach(el=>el.classList.add("revealed"))}
+const gradingLabel=m=>({flexible:"유연 채점",strict:"엄격 채점",self:"직접 확인"}[m]||"유연 채점");
+function answerIsCorrect(got,expected){return state.settings.gradingMode==="strict"?got.trim()===expected.trim():normalizeWord(got)===normalizeWord(expected)}
+function recordTokenResult(item,u,tokenIndex,ok){u.attempts=(u.attempts||0)+1;if(ok){u.wrongTokens=u.wrongTokens.filter(x=>x!==tokenIndex)}else{if(!u.wrongTokens.includes(tokenIndex))u.wrongTokens.push(tokenIndex);u.wrongTokens.sort((a,b)=>a-b);u.wrongCount=(u.wrongCount||0)+1;u.lastWrongAt=new Date().toISOString()}save()}
+function gradeOneInput(input,item,u){if(!input.value.trim()||input.dataset.graded==="true")return;const ts=tokenize(item.originalText),idx=+input.dataset.tokenIndex,expected=ts[idx]?.text||"";if(state.settings.gradingMode==="self")return;const ok=answerIsCorrect(input.value,expected);input.dataset.graded="true";input.classList.toggle("input-correct",ok);input.classList.toggle("input-wrong",!ok);if(!ok){input.title=`정답: ${expected}`;const tip=document.createElement("span");tip.className="inline-correction";tip.textContent=expected;input.insertAdjacentElement("afterend",tip)}recordTokenResult(item,u,idx,ok);updateTypingSummary(item,u)}
+function updateTypingSummary(item,u){const inputs=$$(".inline-answer"),graded=inputs.filter(i=>i.dataset.graded==="true"),correct=graded.filter(i=>i.classList.contains("input-correct")).length,result=$("#typingResult");if(!result)return;if(!graded.length){result.innerHTML="";return}result.innerHTML=`<div class="result-box ${correct===graded.length?"good":"bad"}"><strong>${correct} / ${graded.length}</strong> 현재 채점 · 틀린 어절은 자동으로 <strong>약점 보충</strong>에 저장됩니다.</div>`;if(graded.length===inputs.length&&correct===inputs.length){u.correct=(u.correct||0)+1;save()}}
+function renderTyping(item,u){let mask=state.weaknessOnly&&u.wrongTokens.length?u.wrongTokens:u.masked;if(!mask.length){$("#studyContent").innerHTML='<div class="empty-state"><h2>먼저 암기할 부분을 선택해 주세요.</h2><p>가리기 설정에서 선택한 어절이 타이핑 빈칸이 됩니다.</p></div>';$("#studyFooterRight").innerHTML='<button id="typingSetupBtn" class="primary-btn">가리기 설정</button>';$("#typingSetupBtn").onclick=()=>{state.studyMode="mask-edit";renderStudy()};return}const ts=tokenize(item.originalText);let n=0;const prompt=ts.map(t=>{if(t.isSpace)return esc(t.text);if(!mask.includes(t.index))return`<span>${esc(t.text)}</span>`;const k=n++,w=Math.max(72,Math.min(230,t.text.length*22+25));return`<input class="inline-answer" data-answer-index="${k}" data-token-index="${t.index}" style="width:${w}px" autocomplete="off" spellcheck="false" aria-label="빈칸 ${k+1}">`}).join("");$("#studyContent").innerHTML=`<div class="helper"><strong>${gradingLabel(state.settings.gradingMode)}</strong> · 답을 입력하고 <kbd>Enter</kbd>를 누르거나 다음 칸으로 이동하면 자동 채점됩니다.</div><div class="typing-inline">${prompt}</div><div id="typingResult"></div>`;$("#studyFooterRight").innerHTML='<button id="checkRemainingBtn" class="ghost-btn">입력한 답 전체 확인</button>';const inputs=$$(".inline-answer");inputs.forEach((input,i)=>{input.addEventListener("blur",()=>gradeOneInput(input,item,u));input.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();gradeOneInput(input,item,u);inputs[i+1]?.focus()}})});$("#checkRemainingBtn").onclick=()=>inputs.forEach(input=>gradeOneInput(input,item,u));inputs[0]?.focus()}
+function renderWeakness(){const entries=weaknessEntries();$("#appMain").innerHTML=`<section class="hero"><div><span class="eyebrow">Weakness Review</span><h1>약점 보충</h1><p>타이핑에서 틀린 어절만 자동으로 모았습니다. 다시 맞히면 해당 어절은 약점 목록에서 제거됩니다.</p></div></section>${entries.length?`<div class="weakness-grid">${entries.map(({id,u,found})=>`<article class="card weak-card"><div><span class="weak-meta">${esc(found.subject.name)} · ${esc(found.section.name)}</span><h3>${esc(found.item.title||"교육과정 원문")}</h3><p>남은 약점 <strong>${u.wrongTokens.length}</strong>개 · 누적 오답 ${u.wrongCount||0}회</p></div><div class="weak-actions"><button class="ghost-btn" data-weak-mask="${esc(id)}">가리기로 복습</button><button class="primary-btn" data-weak-type="${esc(id)}">타이핑 재도전</button></div></article>`).join("")}</div>`:'<div class="card empty-state"><h2>현재 약점이 없어요 🎉</h2><p>타이핑에서 틀린 답이 생기면 자동으로 이곳에 모입니다.</p></div>'}`;$$('[data-weak-type]').forEach(b=>b.onclick=()=>openWeakStudy(b.dataset.weakType,"typing"));$$('[data-weak-mask]').forEach(b=>b.onclick=()=>openWeakStudy(b.dataset.weakMask,"mask-study"))}
+function openWeakStudy(id,mode){const f=findItem(id);if(!f)return;state.subjectId=f.subject.id;state.sectionId=f.section.id;state.itemId=f.item.id;state.weaknessOnly=true;state.studyMode=mode;state.view="study";render()}
+function renderSettings(){$("#subjectSettings").innerHTML=allSubjects().map(s=>`<label class="check-row"><input type="checkbox" value="${esc(s.id)}" ${state.settings.visibleSubjects.includes(s.id)?"checked":""}> ${esc(s.name)}</label>`).join("");$$('input[name="gradingMode"]').forEach(r=>r.checked=r.value===state.settings.gradingMode);$("#aiProvider").value=state.settings.aiProvider||"none"}
+function importPayload(p){if(!p||!Array.isArray(p.subjects))throw new Error("지원하지 않는 JSON 형식입니다.");p.subjects.forEach(subject=>{const ex=subjectData(subject.id);if(!ex){state.data.subjects.push(subject);return}const m=new Map((ex.sections||[]).map(s=>[s.id,s]));(subject.sections||[]).forEach(sec=>m.set(sec.id,sec));ex.name=subject.name||ex.name;ex.sections=[...m.values()]});save()}
+$("#homeBtn").onclick=()=>{state.view="home";state.weaknessOnly=false;render()};$("#weaknessBtn").onclick=()=>{state.view="weakness";state.weaknessOnly=false;render()};$("#importBtn").onclick=()=>$("#importFile").click();$("#importFile").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{importPayload(JSON.parse(await f.text()));alert("자료를 추가했습니다.");state.view="reader";render()}catch(err){alert(err.message||"JSON 파일을 읽지 못했습니다.")}e.target.value=""};$("#settingsBtn").onclick=()=>{renderSettings();$("#settingsDialog").showModal()};$("#saveSettingsBtn").onclick=()=>{const c=$$("#subjectSettings input:checked").map(i=>i.value);state.settings.visibleSubjects=c.length?c:["general"];state.settings.gradingMode=$('input[name="gradingMode"]:checked')?.value||"flexible";state.settings.aiProvider=$("#aiProvider").value;save();$("#settingsDialog").close();render()};
+(async()=>{await loadBundledData();render()})();
