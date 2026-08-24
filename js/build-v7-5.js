@@ -1,0 +1,1 @@
+(()=>{const d=document.createElement('div');d.textContent='HTML/Build v7.5';d.style.cssText='position:fixed;right:10px;bottom:10px;z-index:9999;font:700 10px/1 system-ui;background:#fff;color:#171a21;border:1px solid #d9dce2;padding:5px 7px;border-radius:7px;opacity:.72';document.addEventListener('DOMContentLoaded',()=>document.body.append(d));})();
