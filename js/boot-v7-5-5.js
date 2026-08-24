@@ -15,7 +15,7 @@ async function start(){
   if(s.excludeParticles===undefined)s.excludeParticles=true;
   localStorage.setItem(sk,JSON.stringify(s));
  }catch(e){console.error(e)}
- await import(`./app-v5.js?v=${VERSION}`);
+ await import(`./js/app-v5.js?v=${VERSION}`);
  const scripts=['ui-semantic-patch.js','v7-import-replace-v7-5-5.js','study-v7-5.js','weakness-v7-5-2.js','tables-library-v7-5-2.js','settings-bulk-import-v7-5-5.js','readability-v7-5-3.js','build-v7-5.js'];
  for(const f of scripts)await loadClassic(`./js/${f}?v=${VERSION}`);
 }
