@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const VERSION='7.5.7';
+const VERSION='7.5.8';
 window.TES_VERSION=VERSION;
 const appBase=new URL('./',document.baseURI);
 function appUrl(path){return new URL(path,appBase).href+(path.includes('?')?'&':'?')+'v='+encodeURIComponent(VERSION)}
@@ -21,10 +21,10 @@ async function start(){
   localStorage.setItem(sk,JSON.stringify(s));
  }catch(e){console.error(e)}
  status('Loading app v'+VERSION);
- loadScript('js/app-v5.js','module');
+ await loadScript('js/app-v5.js','module');
  const scripts=['js/ui-semantic-patch.js','js/v7-import-replace-v7-5-5.js','js/study-v7-5.js','js/weakness-v7-5-2.js','js/tables-library-v7-5-2.js','js/settings-bulk-import-v7-5-5.js','js/readability-v7-5-3.js','js/build-v7-5.js'];
  for(const f of scripts)await loadScript(f);
- setTimeout(()=>document.getElementById('tesBootStatus')?.remove(),300);
+ document.getElementById('tesBootStatus')?.remove();
 }
 start().catch(err=>{console.error(err);status('Boot partial error v'+VERSION);setTimeout(()=>document.getElementById('tesBootStatus')?.remove(),1500)});
 })();
