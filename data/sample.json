@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "contentType": "curriculum",
+  "subjects": [
+    {
+      "id": "korean",
+      "name": "국어",
+      "sections": [
+        {
+          "id": "teaching",
+          "name": "교수·학습",
+          "items": [
+            {
+              "id": "kor-teaching-demo-001",
+              "title": "업로드 형식 예시",
+              "originalText": "이 위치에는 사용자가 제공한 교육과정 원문이 내용 변경 없이 그대로 들어갑니다."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
