@@ -1,14 +1,14 @@
 (() => {
 'use strict';
-const VERSION='7.5.6';
+const VERSION='7.5.7';
 window.TES_VERSION=VERSION;
 const appBase=new URL('./',document.baseURI);
 function appUrl(path){return new URL(path,appBase).href+(path.includes('?')?'&':'?')+'v='+encodeURIComponent(VERSION)}
-function loadClassic(path){return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=appUrl(path);s.onload=resolve;s.onerror=()=>reject(new Error('load failed: '+path));document.body.appendChild(s)})}
-function status(text){let d=document.getElementById('tesBootStatus');if(!d){d=document.createElement('div');d.id='tesBootStatus';d.style.cssText='position:fixed;left:10px;bottom:10px;z-index:10000;font:700 10px/1 system-ui;background:#171a21;color:#fff;padding:5px 7px;border-radius:7px;opacity:.72';document.body.appendChild(d)}d.textContent=text}
+function status(text){let d=document.getElementById('tesBootStatus');if(!d){d=document.createElement('div');d.id='tesBootStatus';d.style.cssText='position:fixed;left:10px;bottom:10px;z-index:10000;font:700 10px/1 system-ui;background:#171a21;color:#fff;padding:5px 7px;border-radius:7px;opacity:.72;pointer-events:none';document.body.appendChild(d)}d.textContent=text}
+function loadScript(path,type='classic'){return new Promise((resolve)=>{const s=document.createElement('script');s.src=appUrl(path);if(type==='module')s.type='module';s.async=false;s.onload=()=>resolve({ok:true,path});s.onerror=()=>{console.error('load failed',path);resolve({ok:false,path})};document.body.appendChild(s)})}
 async function start(){
  status('Starting v'+VERSION);
- await window.TESLargeStore.ready;
+ try{await window.TESLargeStore.ready}catch(e){console.error(e)}
  status('Storage ready v'+VERSION);
  try{
   const dk='tes_curriculum_v5',sk='tes_settings_v5';
@@ -21,10 +21,10 @@ async function start(){
   localStorage.setItem(sk,JSON.stringify(s));
  }catch(e){console.error(e)}
  status('Loading app v'+VERSION);
- await import(appUrl('js/app-v5.js'));
+ loadScript('js/app-v5.js','module');
  const scripts=['js/ui-semantic-patch.js','js/v7-import-replace-v7-5-5.js','js/study-v7-5.js','js/weakness-v7-5-2.js','js/tables-library-v7-5-2.js','js/settings-bulk-import-v7-5-5.js','js/readability-v7-5-3.js','js/build-v7-5.js'];
- for(const f of scripts)await loadClassic(f);
- document.getElementById('tesBootStatus')?.remove();
+ for(const f of scripts)await loadScript(f);
+ setTimeout(()=>document.getElementById('tesBootStatus')?.remove(),300);
 }
-start().catch(err=>{console.error(err);status('Boot error v'+VERSION);const d=document.createElement('div');d.style.cssText='position:fixed;inset:20px;z-index:99999;background:#fff;padding:20px;border:1px solid #ddd;border-radius:14px;overflow:auto';d.textContent='앱 부팅 중 오류가 발생했습니다: '+(err.message||err);document.body.appendChild(d)});
+start().catch(err=>{console.error(err);status('Boot partial error v'+VERSION);setTimeout(()=>document.getElementById('tesBootStatus')?.remove(),1500)});
 })();
