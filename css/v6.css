@@ -1,0 +1,6 @@
+/* v6: grouped cloze + particle-aware selection */
+.group-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:10px 0 14px}.group-toolbar .active{font-weight:800}.group-help{font-size:12px;color:var(--muted)}
+.grouped-token{box-shadow:inset 0 -2px 0 rgba(37,99,235,.28);border-radius:4px}.group-draft{outline:2px solid rgba(37,99,235,.45);outline-offset:2px;background:rgba(37,99,235,.08)}
+.grouped-mask{min-width:110px}.grouped-answer{min-width:110px}.particle-tail{opacity:.72;font-weight:500}.toggle-row{display:flex;align-items:flex-start;gap:10px;padding:12px 0}.toggle-row span{display:grid;gap:3px}.toggle-row small{color:var(--muted)}
+.token-editor,.mask-study,.typing-inline{white-space:pre-wrap;word-break:keep-all;overflow-wrap:break-word}
+.semantic-separator{display:block;height:1px;background:var(--line);opacity:.65;margin:12px 0}
