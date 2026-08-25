@@ -1,18 +1,25 @@
 (() => {
 'use strict';
-const U='tes_user_v5';
-const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+const D='tes_curriculum_v5',U='tes_user_v5',S='tes_settings_v5',CTX='tes_v75_context';
+const $=s=>document.querySelector(s);
 const read=(k,f)=>{try{return JSON.parse(localStorage.getItem(k))??structuredClone(f)}catch{return structuredClone(f)}};
+const esc=(v='')=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
+const DATA=read(D,{subjects:[]}),itemMap=new Map();for(const sub of DATA.subjects||[])for(const sec of sub.sections||[])for(const item of sec.items||[])itemMap.set(item.id,{sub,sec,item});
 function css(){if($('#tesReaderHighlightStyle'))return;const s=document.createElement('style');s.id='tesReaderHighlightStyle';s.textContent=`
-.reader .token[data-v75-reader-highlight]{border-radius:4px;padding:1px 2px;margin:-1px -2px;box-decoration-break:clone;-webkit-box-decoration-break:clone;background:var(--tes-hl,rgba(148,163,184,.18));box-shadow:inset 0 -2px 0 var(--tes-hl-line,rgba(100,116,139,.35));transition:background .15s ease,box-shadow .15s ease}
-.reader .token[data-v75-reader-highlight="unrated"]{--tes-hl:rgba(148,163,184,.16);--tes-hl-line:rgba(100,116,139,.35)}
+.reader .tes-mask-hl{font-weight:700;border-radius:4px;padding:1px 2px;margin:-1px -2px;box-decoration-break:clone;-webkit-box-decoration-break:clone;background:var(--tes-hl-bg,rgba(59,130,246,.22));box-shadow:inset 0 -2px 0 var(--tes-hl-line,rgba(37,99,235,.62))}
+.reader .tes-mask-hl[data-rated="0"]{--tes-hl-bg:rgba(59,130,246,.22);--tes-hl-line:rgba(37,99,235,.65)}
+.reader .tes-source-hl{color:#c62828;font-weight:700}
 `;document.head.appendChild(s)}
-function color(rate,alpha){const r=Math.max(0,Math.min(1,Number(rate)));const hue=120*r;return `hsla(${hue},78%,48%,${alpha})`}
-function accuracyFor(st,key,legacy){const a=st?.maskAccuracy||{};let rec=a[key];if(!rec&&legacy!=null)rec=a[String(legacy)];if(!rec||!Number(rec.attempts))return null;return Math.max(0,Math.min(1,Number(rec.correct||0)/Number(rec.attempts||1)))}
-function apply(){const reader=$('.reader');if(!reader)return;const item=reader.querySelector('[data-item]')?.dataset.item||sessionItem();if(!item)return;const u=read(U,{itemState:{}}),st=u.itemState?.[item];if(!st)return;const selected=new Set((st.maskedUnits||[]).map(Number));reader.querySelectorAll('[data-v75-reader-highlight]').forEach(el=>{el.removeAttribute('data-v75-reader-highlight');el.style.removeProperty('--tes-hl');el.style.removeProperty('--tes-hl-line')});
- const tokens=[...reader.querySelectorAll('.token')];for(const el of tokens){const idx=Number(el.dataset.v75Unit??el.dataset.idx??el.dataset.tokenIndex);if(!Number.isInteger(idx)||!selected.has(idx))continue;const rate=accuracyFor(st,String(idx),idx);el.dataset.v75ReaderHighlight=rate==null?'unrated':'rated';if(rate!=null){el.style.setProperty('--tes-hl',color(rate,.18));el.style.setProperty('--tes-hl-line',color(rate,.58))}}
-}
-function sessionItem(){try{return JSON.parse(sessionStorage.getItem('tes_v75_context')||'null')?.itemId||null}catch{return null}}
+function ctxItem(){try{return JSON.parse(sessionStorage.getItem(CTX)||'null')?.itemId||null}catch{return null}}
+function current(){const id=ctxItem();if(id&&itemMap.has(id))return itemMap.get(id);const bc=$('.reader .breadcrumb')?.textContent||'',title=$('.reader .reader-heading h1')?.textContent?.trim();if(!bc||!title)return null;const[a,b]=bc.split('/').map(x=>x.trim());for(const sub of DATA.subjects||[])if(sub.name===a)for(const sec of sub.sections||[])if(sec.name===b){const item=(sec.items||[]).find(i=>(i.title||'교육과정 원문')===title)||sec.items?.[0];if(item)return{sub,sec,item}}return null}
+function cfg(){return read(S,{excludeParticles:true})}
+function unitParts(x){if(cfg().excludeParticles===false)return{core:x.surface||'',tail:''};return{core:x.core||x.surface||'',tail:`${x.particle||''}${x.punctuation||''}`}}
+function selected(st){return new Set((st?.maskedUnits||[]).map(Number))}
+function accuracy(st,idx){const all=st?.maskAccuracy||{};let best=null;for(const[k,v]of Object.entries(all)){const ids=String(k).split(',').map(Number);if(!ids.includes(idx)||!Number(v?.attempts))continue;if(!best||Number(v.attempts)>Number(best.attempts))best=v}if(!best)return null;return Math.max(0,Math.min(1,Number(best.correct||0)/Number(best.attempts||1)))}
+function colors(rate){if(rate==null)return{bg:'rgba(59,130,246,.22)',line:'rgba(37,99,235,.65)'};const hue=Math.round(rate*120);return{bg:`hsla(${hue},82%,48%,.20)`,line:`hsla(${hue},78%,40%,.68)`}}
+function sourceHighlighted(block,unitText,searchFrom){const segs=block?.segments||[];if(!segs.length)return false;let pos=0;for(const s of segs){const end=pos+String(s.text||'').length;if(s.highlight&&searchFrom<end&&searchFrom+unitText.length>pos)return true;pos=end}return false}
+function renderBlock(item,block,studyBlock,st){const us=item.studyUnits||[],sel=selected(st);let html='',offset=0;for(let i=studyBlock.unitStart;i<studyBlock.unitEnd;i++){const x=us[i];if(!x)continue;html+=esc(x.leadingSpace||'');offset+=String(x.leadingSpace||'').length;const p=unitParts(x),isSel=sel.has(i),rate=isSel?accuracy(st,i):null,c=colors(rate),src=sourceHighlighted(block,x.surface||'',offset);if(isSel){html+=`<span class="tes-mask-hl${src?' tes-source-hl':''}" data-rated="${rate==null?'0':'1'}" style="--tes-hl-bg:${c.bg};--tes-hl-line:${c.line}" title="${rate==null?'아직 학습 완료 기록 없음':`누적 정답률 ${Math.round(rate*100)}%`}">${esc(p.core)}</span>${p.tail?`<span${src?' class="tes-source-hl"':''}>${esc(p.tail)}</span>`:''}`}else html+=`<span${src?' class="tes-source-hl"':''}>${esc(x.surface||'')}</span>`;offset+=String(x.surface||'').length}return html}
+function apply(){const c=current(),doc=$('.reader .source-document');if(!c||!doc||!Array.isArray(c.item.studyUnits)||!Array.isArray(c.item.studyBlocks))return;const u=read(U,{itemState:{}}),st=u.itemState?.[c.item.id]||{};const original=(c.item.blocks||[]).filter(b=>b.type!=='table'),study=(c.item.studyBlocks||[]).filter(b=>b.type!=='table'&&b.unitStart!=null),els=[...doc.children].filter(el=>!el.matches('.table-scroll,.v751scroll,.v75scroll,.v76ts,.v751placeholder,[data-table-id]'));let j=0;for(let i=0;i<study.length&&j<els.length;i++,j++){const sb=study[i],ob=original[i]||{},el=els[j];if(el.dataset.tesHlApplied===c.item.id)continue;el.innerHTML=renderBlock(c.item,ob,sb,st);el.dataset.tesHlApplied=c.item.id}}
 let raf=0;function schedule(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;apply()})}
-css();document.addEventListener('click',e=>{if(e.target.closest('#homeBtn,[data-subject],[data-section],[data-item],#v75dock'))setTimeout(schedule,30)},true);window.addEventListener('storage',schedule);window.addEventListener('tes:accuracy-updated',schedule);new MutationObserver(schedule).observe($('#appMain')||document.body,{childList:true,subtree:true});schedule();
+css();document.addEventListener('click',e=>{if(e.target.closest('#homeBtn,[data-subject],[data-section],[data-item],#v75dock'))setTimeout(schedule,40)},true);window.addEventListener('tes:weakness-updated',schedule);window.addEventListener('tes:accuracy-updated',schedule);new MutationObserver(schedule).observe($('#appMain')||document.body,{childList:true,subtree:true});schedule();
 })();
