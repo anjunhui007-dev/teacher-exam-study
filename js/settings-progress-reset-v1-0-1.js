@@ -4,7 +4,7 @@ const D='tes_curriculum_v5',U='tes_user_v5';
 const $=s=>document.querySelector(s);
 const read=(k,f)=>{try{return JSON.parse(localStorage.getItem(k))??structuredClone(f)}catch{return structuredClone(f)}};
 const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const esc=(v='')=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const esc=(v='')=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
 function inject(){
  const form=$('#settingsForm'); if(!form||$('#v101ProgressReset')) return;
  const d=read(D,{subjects:[]}), subjects=d.subjects||[];
@@ -20,8 +20,8 @@ function inject(){
    const a=read(U,{rounds:{},itemState:{}});a.rounds??={};const old=a.rounds[sid]||{count:0,completed:[]};
    a.rounds[sid]=mode==='all'?{...old,count:0,completed:[]}:{...old,completed:[]};
    if(mode==='all'){
-     // 회독 번호를 되돌릴 때 과거 약점이 재등장하지 않도록 현재 회독 약점 인덱스만 비웁니다.
-     for(const s of Object.values(a.itemState||{})) if(s?.weakByRound) s.weakByRound={};
+     const ids=new Set((sub.sections||[]).flatMap(sec=>(sec.items||[]).map(item=>item.id)));
+     for(const [itemId,s] of Object.entries(a.itemState||{})) if(ids.has(itemId)&&s?.weakByRound) s.weakByRound={};
    }
    write(U,a);updateInfo();window.dispatchEvent(new CustomEvent('tes:progress-reset',{detail:{subjectId:sid,mode}}));alert(`${sub.name} 진행도를 초기화했습니다.`);
  };
