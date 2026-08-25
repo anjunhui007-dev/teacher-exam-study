@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const VERSION='1.0.5';
+const VERSION='1.0.6';
 window.TES_VERSION=VERSION;
 const appBase=new URL('./',document.baseURI);
 function appUrl(path){return new URL(path,appBase).href+(path.includes('?')?'&':'?')+'v='+encodeURIComponent(VERSION)}
