@@ -1,6 +1,6 @@
 (() => {
 'use strict';
-const VERSION='1.0.3';
+const VERSION='1.0.4';
 window.TES_VERSION=VERSION;
 const appBase=new URL('./',document.baseURI);
 function appUrl(path){return new URL(path,appBase).href+(path.includes('?')?'&':'?')+'v='+encodeURIComponent(VERSION)}
@@ -22,7 +22,7 @@ async function start(){
  }catch(e){console.error(e)}
  status('Loading app v'+VERSION);
  await loadScript('js/app-v5.js','module');
- const scripts=['js/ui-semantic-patch.js','js/v7-import-replace-v7-5-5.js','js/compound-particle-fix-v1-0-3.js','js/study-v7-6.js','js/accuracy-round-v7-6-2.js','js/weakness-v7-6-1.js','js/weakness-batch-v1-0-1.js','js/completion-ui-v7-6-3.js','js/settings-progress-reset-v1-0-1.js','js/tables-library-v7-5-2.js','js/settings-bulk-import-v7-5-5.js','js/readability-v7-5-3.js','js/build-v7-5.js'];
+ const scripts=['js/ui-semantic-patch.js','js/v7-import-replace-v7-5-5.js','js/compound-particle-fix-v1-0-3.js','js/study-v7-6.js','js/accuracy-round-v7-6-2.js','js/reader-highlight-v1-0-4.js','js/weakness-v7-6-1.js','js/weakness-batch-v1-0-1.js','js/completion-ui-v7-6-3.js','js/settings-progress-reset-v1-0-1.js','js/tables-library-v7-5-2.js','js/settings-bulk-import-v7-5-5.js','js/readability-v7-5-3.js','js/build-v7-5.js'];
  for(const f of scripts)await loadScript(f);
  document.getElementById('tesBootStatus')?.remove();
 }
