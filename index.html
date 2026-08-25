@@ -7,10 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache" />
   <meta http-equiv="Expires" content="0" />
   <title>Teacher Exam Study</title>
-  <link rel="stylesheet" href="./css/style.css?v=7.6.0" />
-  <link rel="stylesheet" href="./css/extra.css?v=7.6.0" />
-  <link rel="stylesheet" href="./css/v5.css?v=7.6.0" />
-  <link rel="stylesheet" href="./css/semantic.css?v=7.6.0" />
+  <link rel="stylesheet" href="./css/style.css?v=7.6.1" />
+  <link rel="stylesheet" href="./css/extra.css?v=7.6.1" />
+  <link rel="stylesheet" href="./css/v5.css?v=7.6.1" />
+  <link rel="stylesheet" href="./css/semantic.css?v=7.6.1" />
 </head>
 <body>
   <div class="app-shell">
@@ -24,8 +24,8 @@
   </div>
   <dialog id="importDialog" class="settings-dialog"><form method="dialog" id="importForm"><div class="dialog-header"><div><h2 id="importDialogTitle">자료 업로드</h2><p id="importDialogText">현재 과목에 JSON 자료를 병합합니다.</p></div><button class="icon-btn" value="cancel" aria-label="닫기">×</button></div><section class="settings-section"><label class="upload-drop" for="importFile"><strong>JSON 파일 선택</strong><span>과목별 본문 JSON을 업로드합니다. 표 JSON은 표 모음집에서 관리합니다.</span><input id="importFile" type="file" accept="application/json,.json" hidden /></label><div id="selectedFileName" class="selected-file">아직 선택된 파일이 없습니다.</div></section><div class="dialog-actions"><button value="cancel" class="ghost-btn">취소</button><button id="doImportBtn" type="button" class="primary-btn">현재 과목에 업로드</button></div></form></dialog>
   <dialog id="settingsDialog" class="settings-dialog settings-wide"><form method="dialog" id="settingsForm"><div class="dialog-header"><div><h2>학습 설정</h2><p>과목과 영역을 내 공부 범위에 맞게 구성하세요.</p></div><button class="icon-btn" value="cancel" aria-label="닫기">×</button></div><section class="settings-section"><h3>상단 과목 바</h3><p class="muted">체크한 과목만 상단에 표시됩니다.</p><div id="subjectSettings" class="subject-setting-list"></div></section><section class="settings-section"><h3>과목별 영역</h3><p class="muted">본문 JSON에 존재하는 실제 영역을 표시합니다. ‘표시’와 ‘회독/학습’ 범위를 각각 정할 수 있습니다.</p><div id="areaSettings" class="area-settings"></div></section><section class="settings-section"><h3>빈칸 선택 방식</h3><p class="muted">v7.6 JSON에 검토해 저장된 조사 정보를 사용합니다.</p><label class="toggle-row"><input id="particleSelectable" type="checkbox" checked /> <span><strong>조사 제외하기</strong><small>켬: JSON의 core만 가림 · 끔: 원 어절 전체를 가림</small></span></label></section><section class="settings-section"><h3>타이핑 채점</h3><label class="radio-row"><input type="radio" name="gradingMode" value="flexible" /> 유연 채점 <span>띄어쓰기·문장부호 차이 허용</span></label><label class="radio-row"><input type="radio" name="gradingMode" value="strict" /> 엄격 채점 <span>원문과 동일해야 정답</span></label><label class="radio-row"><input type="radio" name="gradingMode" value="self" /> 직접 확인 <span>정답 확인 후 내가 판정</span></label></section><section class="settings-section"><h3>AI API</h3><p class="muted">현재는 설정만 준비되어 있고 실제 호출은 비활성화되어 있습니다.</p><select id="aiProvider"><option value="none">사용 안 함</option><option value="openai">OpenAI</option><option value="gemini">Google Gemini</option></select></section><div class="dialog-actions"><button value="cancel" class="ghost-btn">취소</button><button id="saveSettingsBtn" type="button" class="primary-btn">저장</button></div></form></dialog>
-  <script>window.__TES_INDEX_VERSION__='7.6.0';</script>
-  <script src="./js/storage-v7-5-5.js?v=7.6.0"></script>
-  <script src="./js/boot-v7-5-5.js?v=7.6.0" defer></script>
+  <script>window.__TES_INDEX_VERSION__='7.6.1';</script>
+  <script src="./js/storage-v7-5-5.js?v=7.6.1"></script>
+  <script src="./js/boot-v7-5-5.js?v=7.6.1" defer></script>
 </body>
 </html>
