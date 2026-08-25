@@ -1,10 +1,11 @@
 (() => {
 'use strict';
-const D='tes_curriculum_v5',U='tes_user_v5';
+const D='tes_curriculum_v5',U='tes_user_v5',RESULT='tes_progress_reset_result_v102';
 const $=s=>document.querySelector(s);
 const read=(k,f)=>{try{return JSON.parse(localStorage.getItem(k))??structuredClone(f)}catch{return structuredClone(f)}};
 const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
-const esc=(v='')=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+const esc=(v='')=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#039;'}[c]));
+function showResult(){const m=sessionStorage.getItem(RESULT);if(!m)return;sessionStorage.removeItem(RESULT);setTimeout(()=>alert(m),120)}
 function inject(){
  const form=$('#settingsForm'); if(!form||$('#v101ProgressReset')) return;
  const d=read(D,{subjects:[]}), subjects=d.subjects||[];
@@ -23,9 +24,12 @@ function inject(){
      const ids=new Set((sub.sections||[]).flatMap(sec=>(sec.items||[]).map(item=>item.id)));
      for(const [itemId,s] of Object.entries(a.itemState||{})) if(ids.has(itemId)&&s?.weakByRound) s.weakByRound={};
    }
-   write(U,a);updateInfo();window.dispatchEvent(new CustomEvent('tes:progress-reset',{detail:{subjectId:sid,mode}}));alert(`${sub.name} 진행도를 초기화했습니다.`);
+   write(U,a);
+   sessionStorage.setItem(RESULT,`${sub.name} 진행도를 초기화했습니다. 홈 화면 진행도도 새 값으로 갱신되었습니다.`);
+   location.reload();
  };
 }
+showResult();
 new MutationObserver(()=>inject()).observe(document.documentElement,{childList:true,subtree:true});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',inject);else inject();
 })();
