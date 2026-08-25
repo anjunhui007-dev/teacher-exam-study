@@ -1,0 +1,25 @@
+(() => {
+'use strict';
+const D='tes_curriculum_v5',U='tes_user_v5',CTX='tes_v75_context';
+const read=(k,f)=>{try{return JSON.parse(localStorage.getItem(k))??structuredClone(f)}catch{return structuredClone(f)}};
+const write=(k,v)=>localStorage.setItem(k,JSON.stringify(v));
+const DATA=read(D,{subjects:[]}), itemMap=new Map();
+for(const sub of DATA.subjects||[])for(const sec of sub.sections||[])for(const item of sec.items||[])itemMap.set(item.id,{sub,sec,item});
+const units=i=>Array.isArray(i?.studyUnits)?i.studyUnits:[];
+function ctx(){try{const c=JSON.parse(sessionStorage.getItem(CTX)||'null');return c?itemMap.get(c.itemId):null}catch{return null}}
+function stateFor(item){const a=read(U,{itemState:{},rounds:{}});a.itemState??={};a.rounds??={};a.itemState[item.id]??={};const s=a.itemState[item.id];s.maskAccuracy??={};s.maskAccuracyPending??={};s.weakByRound??={};return{a,s}}
+function roundKey(a,subId){return String(Number(a.rounds?.[subId]?.count||0))}
+function semanticFor(item,ids){const us=units(item);return[...new Set(ids.map(i=>us[i]?.semanticUnit).filter(Boolean))]}
+function addWeak(item,subId,ids){const {a,s}=stateFor(item),rk=roundKey(a,subId);s.weakByRound[rk]??=[];for(const sem of semanticFor(item,ids))if(!s.weakByRound[rk].includes(sem))s.weakByRound[rk].push(sem);write(U,a)}
+function statColor(st){if(!st||!st.attempts)return'#a8adb7';const rate=Math.max(0,Math.min(1,st.correct/st.attempts));return`hsl(${Math.round(rate*120)} 72% 42%)`}
+function decorate(el,item){const key=el.dataset.v75Reveal;if(!key)return;const {s}=stateFor(item),st=s.maskAccuracy?.[key];const color=statColor(st);el.style.setProperty('--v761-acc',color);el.style.borderColor=color;if(st?.attempts){const pct=Math.round(st.correct/st.attempts*100);el.title=`누적 정답률 ${pct}% (${st.correct}/${st.attempts})`}else el.title='누적 정답률: 아직 기록 없음'}
+function decorateAll(){const c=ctx();if(!c)return;document.querySelectorAll('[data-v75-reveal]').forEach(el=>decorate(el,c.item))}
+function afterMask(el){const c=ctx();if(!c)return;const item=c.item,ids=(el.dataset.v75Reveal||'').split(',').map(Number).filter(Number.isFinite),key=el.dataset.v75Reveal,{a,s}=stateFor(item);s.maskAccuracy[key]??={attempts:0,correct:0};const st=s.maskAccuracy[key];let next='hidden';if(el.classList.contains('v75correct'))next='correct';else if(el.classList.contains('v75wrong'))next='wrong';const pending=!!s.maskAccuracyPending[key];if(next==='correct'&&!pending){st.attempts++;st.correct++;s.maskAccuracyPending[key]=true}else if(next==='wrong'){if(pending){st.correct=Math.max(0,st.correct-1)}else{st.attempts++}s.maskAccuracyPending[key]=false;const rk=roundKey(a,c.sub.id);s.weakByRound[rk]??=[];for(const sem of semanticFor(item,ids))if(!s.weakByRound[rk].includes(sem))s.weakByRound[rk].push(sem)}else if(next==='hidden'){s.maskAccuracyPending[key]=false}write(U,a);decorate(el,item);window.dispatchEvent(new CustomEvent('tes:weakness-updated',{detail:{subjectId:c.sub.id}}))}
+function afterTyping(inp){const c=ctx();if(!c||!inp.classList.contains('input-wrong'))return;const ids=(inp.dataset.v75Idx||'').split(',').map(Number).filter(Number.isFinite);addWeak(c.item,c.sub.id,ids);window.dispatchEvent(new CustomEvent('tes:weakness-updated',{detail:{subjectId:c.sub.id}}))}
+function css(){if(document.getElementById('v761accStyle'))return;const s=document.createElement('style');s.id='v761accStyle';s.textContent=`.mask-study [data-v75-reveal]{border:2px solid var(--v761-acc,#a8adb7)!important;transition:border-color .2s ease,box-shadow .2s ease}.mask-study [data-v75-reveal].v75correct{border-color:var(--v761-acc,#a8adb7)!important;box-shadow:0 0 0 3px rgba(34,197,94,.10)!important}.mask-study [data-v75-reveal].v75wrong{border-color:var(--v761-acc,#a8adb7)!important;box-shadow:0 0 0 3px rgba(239,68,68,.10)!important}`;document.head.append(s)}
+css();
+document.addEventListener('click',e=>{const el=e.target.closest?.('[data-v75-reveal]');if(!el)return;queueMicrotask(()=>afterMask(el))},false);
+document.addEventListener('focusout',e=>{const inp=e.target.closest?.('.inline-answer[data-v75-idx]');if(!inp)return;setTimeout(()=>afterTyping(inp),0)},true);
+new MutationObserver(()=>requestAnimationFrame(decorateAll)).observe(document.getElementById('appMain')||document.body,{childList:true,subtree:true});
+window.addEventListener('tes:study-rendered',decorateAll);decorateAll();
+})();
